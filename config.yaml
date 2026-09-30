@@ -1,0 +1,7 @@
+software:
+  - id: xray
+    name: Xray-core
+    provider: github
+    repository: XTLS/Xray-core
+    channel: prerelease
+    enabled: true

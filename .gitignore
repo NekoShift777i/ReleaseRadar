@@ -1,0 +1,25 @@
+# Virtual environments
+.venv/
+venv/
+
+# Environment variables / secrets
+.env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Logs
+*.log
+
+# ReleaseRadar state
+*.db
+*.db-journal
+*.sqlite
+*.sqlite-journal
+*.sqlite3
+*.sqlite3-journal
+
+# IDE
+.vscode/
