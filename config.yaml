@@ -4,4 +4,5 @@ software:
     provider: github
     repository: XTLS/Xray-core
     channel: prerelease
+    current_version: test-version
     enabled: true

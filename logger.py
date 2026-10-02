@@ -10,7 +10,7 @@ def setup_logging() -> None:
             "%(asctime)s | %(levelname)-8s | "
             "%(name)s | %(message)s"
         ),
-        datefmt="%Y-%M-%D %H:%M:%S",
+        datefmt="%Y-%m-%d %H:%M:%S",
         handlers=[
             logging.StreamHandler(sys.stdout),
             logging.FileHandler(
