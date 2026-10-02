@@ -6,6 +6,7 @@ from database import (
     initialize_database, 
     get_or_create_software_state,
     update_software_check,
+    mark_version_updated,
 )
 
 import logging
@@ -15,13 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 
-def main() -> None:
-    logger.info("ReleaseRadar started")
-
-    initialize_database()
-
-    config = load_config()
-
+def check_updates(config: dict) -> None:
     for software in config["software"]:
         if not software["enabled"]:
             logger.info(
@@ -57,6 +52,23 @@ def main() -> None:
                 release.version,
             )
 
+            update_available = (
+                state["current_version"] != release.version
+            )
+
+            if update_available:
+                logger.info(
+                    "%s update available: %s -> %s",
+                    software["name"],
+                    state["current_version"],
+                    release.version,
+                )
+            else:
+                logger.info(
+                    "%s is up to date",
+                    software["name"],
+                )
+
             update_software_check(
                 software["id"],
                 release.version,
@@ -74,6 +86,16 @@ def main() -> None:
                 "Failed to check %s",
                 software["name"],
             )
+
+
+
+def main() -> None:
+    logger.info("ReleaseRadar started")
+
+    initialize_database()
+
+    config = load_config()
+    check_updates(config)
 
 if __name__ == "__main__":
     try:

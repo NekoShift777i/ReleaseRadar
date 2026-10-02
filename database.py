@@ -118,3 +118,23 @@ def update_software_check(
                 software_id,
             ),
         )
+
+
+
+def mark_version_updated(software_id:str) -> None:
+    with get_connection() as connection:
+        cursor = connection.execute(
+            """
+            UPDATE software_state
+            SET current_version = latest_version
+            WHERE software_id = ?
+              AND latest_version IS NOT NULL
+            """,
+            (software_id,),
+        )
+
+        if cursor.rowcount == 0:
+            raise ValueError(
+                f"Cannot mark (software_id) as updated: "
+                "software not found or latest version is NULL" \
+            )
