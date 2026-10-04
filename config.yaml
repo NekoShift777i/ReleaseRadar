@@ -73,7 +73,7 @@ software:
   - id: morphe-pathes
     name: Morphe Patches
     provider: github
-    repository: MorpheApp/morphe-pathes
+    repository: MorpheApp/morphe-patches
     channel: prerelease
     current_version: v1.45.0
     enabled: true
