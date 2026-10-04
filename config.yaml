@@ -82,4 +82,5 @@ software:
     provider: github
     repository: MorpheApp/morphe-manager
     channel: prerelease
+    current_version: v1.33.0-dev.1
     enabled: true
