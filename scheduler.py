@@ -5,6 +5,51 @@ from collections.abc import Awaitable, Callable
 logger = logging.getLogger(__name__)
 
 
+class ManualCheckRequests:
+    """Reserve manual cycles on the same event loop as the periodic runner."""
+    def __init__(self, stop_event: asyncio.Event):
+        self.stop_event = stop_event
+        self.wake = asyncio.Event()
+        self.running = True  # The initial cycle is already reserved.
+        self.pending = False
+        self.completion = None
+
+    def request(self, completion: Callable[[str], Awaitable[None]]) -> str:
+        if self.stop_event.is_set():
+            return "stopping"
+        if self.running or self.pending:
+            return "busy"
+        self.pending = True
+        self.completion = completion
+        self.wake.set()
+        return "accepted"
+
+    def begin_cycle(self):
+        self.running = True
+        completion = self.completion
+        self.completion = None
+        self.pending = False
+        self.wake.clear()
+        return completion
+
+
+async def wait_for_next_check(stop_event, interval, manual_requests):
+    if manual_requests is None:
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=interval)
+        except asyncio.TimeoutError:
+            pass
+        return
+    waiters = [asyncio.create_task(stop_event.wait()), asyncio.create_task(manual_requests.wake.wait())]
+    try:
+        await asyncio.wait(waiters, timeout=interval, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        for task in waiters:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*waiters, return_exceptions=True)
+
+
 def get_check_interval(config: dict) -> int:
     interval = config.get("check_interval_seconds", 3600)
     if isinstance(interval, bool) or not isinstance(interval, int) or interval <= 0:
@@ -13,20 +58,28 @@ def get_check_interval(config: dict) -> int:
 
 
 async def run_periodic_checks(
-    check_once: Callable[[], Awaitable[None]],
+    check_once: Callable[[], Awaitable[str | None]],
     stop_event: asyncio.Event,
     interval: int,
+    manual_requests: ManualCheckRequests | None = None,
 ) -> None:
     """Run immediately, then wait after each completed cycle. Never overlap."""
     while not stop_event.is_set():
+        completion = manual_requests.begin_cycle() if manual_requests else None
         try:
-            await check_once()
+            result = await check_once()
         except Exception:
             logger.exception("Update check cycle failed; will retry next cycle")
+            result = "Не удалось завершить проверку. Подробности — в журнале."
+
+        if completion is not None and not stop_event.is_set():
+            try:
+                await completion(result or "Проверка завершена.")
+            except Exception:
+                logger.exception("Failed to send manual check result")
+        if manual_requests:
+            manual_requests.running = False
 
         if stop_event.is_set():
             break
-        try:
-            await asyncio.wait_for(stop_event.wait(), timeout=interval)
-        except asyncio.TimeoutError:
-            pass
+        await wait_for_next_check(stop_event, interval, manual_requests)

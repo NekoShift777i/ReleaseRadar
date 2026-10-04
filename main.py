@@ -7,8 +7,8 @@ from update_logic import should_notify, UpdateResult
 from notifications import get_pending_notifications
 from telegram_notifier import send_update_notification
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler
-from telegram_handlers import handle_version_updated, handle_status
-from scheduler import get_check_interval, run_periodic_checks
+from telegram_handlers import handle_version_updated, handle_status, handle_check
+from scheduler import get_check_interval, run_periodic_checks, ManualCheckRequests
 from shutdown import ShutdownController, handle_console_interrupt, keep_signal_loop_responsive
 from providers.base import CheckCancelled
 from threading import Event
@@ -136,7 +136,8 @@ async def send_pending_notifications(
         chat_id: int,
         pending_notifications: list[UpdateResult],
         stop_event: Event | None = None,
-) -> None:
+) -> tuple[int, int]:
+    sent = failed = 0
     for result in pending_notifications:
         if stop_event is not None and stop_event.is_set():
             break
@@ -158,12 +159,15 @@ async def send_pending_notifications(
                 result.software_id,
                 result.latest_version,
             )
+            sent += 1
 
         except Exception:
+            failed += 1
             logger.exception(
                 "Failed to send notification for %s",
                 result.software_name
             )
+    return sent, failed
 
 
 def main() -> None:
@@ -183,21 +187,33 @@ def main() -> None:
         if shutdown.worker_stop.is_set():
             stop_event.set()
 
-        async def check_once() -> None:
+        async def check_once() -> str | None:
             logger.info("Update check cycle started")
             results = await asyncio.to_thread(check_updates, config, shutdown.worker_stop)
             if shutdown.worker_stop.is_set():
                 return
-            await send_pending_notifications(
+            sent, failed = await send_pending_notifications(
                 application, telegram_chat_id, get_pending_notifications(results),
                 shutdown.worker_stop,
             )
             logger.info("Update check cycle finished; next check in %s seconds", interval)
+            enabled_count = sum(software["enabled"] for software in config["software"])
+            check_errors = enabled_count - len(results)
+            return (
+                "Проверка завершена.\n"
+                f"Успешно проверено: {len(results)} из {enabled_count}.\n"
+                f"Ошибок проверки: {check_errors}.\n"
+                f"Новых уведомлений отправлено: {sent}.\n"
+                f"Ошибок отправки: {failed}.\n"
+                "Состояние программ: /status"
+            )
 
         application.bot_data["check_stop_event"] = stop_event
+        manual_requests = ManualCheckRequests(stop_event)
+        application.bot_data["manual_checks"] = manual_requests
         application.bot_data["signal_task"] = asyncio.create_task(keep_signal_loop_responsive(stop_event))
         application.bot_data["check_task"] = asyncio.create_task(
-            run_periodic_checks(check_once, stop_event, interval),
+            run_periodic_checks(check_once, stop_event, interval, manual_requests),
             name="release-radar-checks",
         )
 
@@ -226,6 +242,7 @@ def main() -> None:
     application.bot_data["config"] = config
     application.bot_data["telegram_chat_id"] = telegram_chat_id
     application.add_handler(CommandHandler("status", handle_status))
+    application.add_handler(CommandHandler("check", handle_check))
 
     application.add_handler(
         CallbackQueryHandler(

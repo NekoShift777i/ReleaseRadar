@@ -11,6 +11,39 @@ from status import get_status_messages
 logger = logging.getLogger(__name__)
 
 
+async def handle_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.effective_message
+    chat = update.effective_chat
+    if message is None or chat is None or chat.id != context.bot_data.get("telegram_chat_id"):
+        return
+    requests = context.bot_data.get("manual_checks")
+    if requests is None:
+        await message.reply_text("Бот ещё запускается. Попробуйте чуть позже.", parse_mode=None)
+        return
+    if not any(software["enabled"] for software in context.bot_data["config"]["software"]):
+        await message.reply_text("Нет включённых программ для проверки.", parse_mode=None)
+        return
+
+    acknowledged = asyncio.Event()
+
+    async def send_result(text: str) -> None:
+        await acknowledged.wait()
+        await message.reply_text(text, parse_mode=None)
+
+    decision = requests.request(send_result)
+    answer = {
+        "accepted": "Проверка запрошена. Сообщу результат после завершения.",
+        "busy": "Проверка уже выполняется или запрошена. Вторую не запускаю.",
+        "stopping": "Бот останавливается. Новая проверка не запущена.",
+    }[decision]
+    try:
+        await message.reply_text(answer, parse_mode=None)
+    except TelegramError:
+        logger.warning("Failed to acknowledge manual check", exc_info=True)
+    finally:
+        acknowledged.set()
+
+
 async def handle_status(
         update: Update,
         context: ContextTypes.DEFAULT_TYPE,
