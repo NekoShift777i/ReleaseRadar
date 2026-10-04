@@ -6,8 +6,8 @@ from datetime import datetime, timezone
 from update_logic import should_notify, UpdateResult
 from notifications import get_pending_notifications
 from telegram_notifier import send_update_notification
-from telegram.ext import Application, CallbackQueryHandler
-from telegram_handlers import handle_version_updated
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler
+from telegram_handlers import handle_version_updated, handle_status
 from scheduler import get_check_interval, run_periodic_checks
 from database import (
     initialize_database, 
@@ -203,6 +203,10 @@ def main() -> None:
         .post_stop(post_stop)
         .build()
     )
+
+    application.bot_data["config"] = config
+    application.bot_data["telegram_chat_id"] = telegram_chat_id
+    application.add_handler(CommandHandler("status", handle_status))
 
     application.add_handler(
         CallbackQueryHandler(
