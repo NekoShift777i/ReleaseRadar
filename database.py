@@ -1,4 +1,7 @@
 import sqlite3
+import secrets
+from contextlib import contextmanager
+from collections.abc import Iterator
 
 from pathlib import Path
 
@@ -8,16 +11,46 @@ DATABASE_PATH = Path("release-radar.db")
 
 
 
-def get_connection() -> sqlite3.Connection:
+@contextmanager
+def get_connection() -> Iterator[sqlite3.Connection]:
     connection = sqlite3.connect(DATABASE_PATH)
     connection.row_factory = sqlite3.Row
 
-    return connection
+    try:
+        with connection:
+            yield connection
+    finally:
+        connection.close()
 
+
+
+def create_notification_button(software_id: str, version: str) -> str:
+    token = secrets.token_hex(16)
+    with get_connection() as connection:
+        connection.execute(
+            "INSERT INTO notification_buttons (token, software_id, version) VALUES (?, ?, ?)",
+            (token, software_id, version),
+        )
+    return token
+
+
+def get_notification_button(token: str) -> sqlite3.Row | None:
+    with get_connection() as connection:
+        return connection.execute(
+            "SELECT software_id, version FROM notification_buttons WHERE token = ?",
+            (token,),
+        ).fetchone()
 
 
 def initialize_database() -> None:
     with get_connection() as connection:
+        legacy_database = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'notification_buttons'"
+        ).fetchone() is None
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS notification_buttons ("
+            "token TEXT PRIMARY KEY, software_id TEXT NOT NULL, version TEXT NOT NULL)"
+        )
         connection.execute(
             """
             CREATE TABLE IF NOT EXISTS software_state (
@@ -29,6 +62,12 @@ def initialize_database() -> None:
             )
             """
         )
+        if legacy_database:
+            # Reissue outstanding legacy notifications with version-bound buttons.
+            connection.execute(
+                "UPDATE software_state SET last_notified_version = NULL "
+                "WHERE latest_version IS NOT NULL AND current_version != latest_version"
+            )
 
 
 
@@ -121,20 +160,39 @@ def update_software_check(
 
 
 
-def mark_version_updated(software_id:str) -> None:
+def mark_version_updated(software_id: str, version: str) -> bool:
+    """Confirm only the release attached to the button, atomically."""
     with get_connection() as connection:
         cursor = connection.execute(
             """
             UPDATE software_state
-            SET current_version = latest_version
-            WHERE software_id = ?
-              AND latest_version IS NOT NULL
+            SET current_version = ?
+            WHERE software_id = ? AND latest_version = ? AND current_version != ?
             """,
-            (software_id,),
+            (version, software_id, version, version),
+        )
+        return cursor.rowcount == 1
+
+
+def mark_version_notified(
+        software_id: str,
+        version: str,
+) -> None:
+    with get_connection() as connection:
+        cursor = connection.execute(
+            """
+            UPDATE software_state
+            SET last_notified_version = ?
+            WHERE software_id = ?
+            """,
+            (
+                version,
+                software_id,
+            ),  
         )
 
         if cursor.rowcount == 0:
             raise ValueError(
-                f"Cannot mark (software_id) as updated: "
-                "software not found or latest version is NULL" \
+                f"Cannot mark {software_id} as notified: "
+                "software not found"
             )

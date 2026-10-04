@@ -1,3 +1,4 @@
+check_interval_seconds: 3600
 software:
   - id: xray
     name: Xray-core
