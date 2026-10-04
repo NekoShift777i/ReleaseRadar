@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from providers.base import Release, CheckCancelled, raise_if_stopping
+from threading import Event
 
 import httpx
 import logging
@@ -7,18 +8,16 @@ GITHUB_API_URL = "https://api.github.com"
 
 logger = logging.getLogger(__name__)
 
-@dataclass
-class Release:
-    version: str
-    url: str
-    prerelease: bool
 
 
 
 def get_latest_release(
     repository:str,
     include_prerelease: bool = False,
+    *,
+    stop_event: Event | None = None,
 ) -> Release:
+    raise_if_stopping(stop_event)
     logger.info(
         "Checking GitHub releases for %s "
         "(include_prerelease=%s)",
@@ -40,6 +39,7 @@ def get_latest_release(
             },
             timeout=10.0,
         )
+        raise_if_stopping(stop_event)
         response.raise_for_status()
 
         data = response.json()
@@ -68,6 +68,8 @@ def get_latest_release(
 
         return release
 
+    except CheckCancelled:
+        raise
     except Exception:
         logger.exception(
             "Failed to get GitHub release for %s",

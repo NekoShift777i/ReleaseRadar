@@ -1,5 +1,6 @@
 import re
 from typing import Any
+from urllib.parse import urlsplit
 
 
 class ConfigError(ValueError):
@@ -28,12 +29,13 @@ def validate_config(config: Any) -> dict[str, Any]:
     else:
         ids = set()
         required = {"id", "name", "provider", "repository", "channel", "current_version", "enabled"}
+        gitlab_optional = {"gitlab_url", "token_env", "prerelease_pattern"}
         for index, software in enumerate(software_list):
             path = f"software[{index}]"
             if not isinstance(software, dict):
                 errors.append(f"{path}: ожидается набор полей программы")
                 continue
-            unknown_fields(software, required, path)
+            unknown_fields(software, required | gitlab_optional, path)
             for field in sorted(required):
                 if field not in software:
                     errors.append(f"{path}.{field}: обязательное поле отсутствует")
@@ -53,17 +55,50 @@ def validate_config(config: Any) -> dict[str, Any]:
                     errors.append(f"{path}.id: повторяющийся идентификатор {software_id!r}")
                 ids.add(software_id)
             provider = software.get("provider")
-            if isinstance(provider, str) and provider != "github":
-                errors.append(f"{path}.provider: сейчас поддерживается только github")
+            if isinstance(provider, str) and provider not in {"github", "gitlab"}:
+                errors.append(f"{path}.provider: допустимы github и gitlab")
+            for field in sorted(gitlab_optional & software.keys()):
+                if provider != "gitlab":
+                    errors.append(f"{path}.{field}: поле доступно только для gitlab")
+                value = software[field]
+                if not isinstance(value, str) or not value.strip() or value != value.strip():
+                    errors.append(f"{path}.{field}: ожидается непустая строка без внешних пробелов")
+                    continue
+                if field == "gitlab_url":
+                    try:
+                        parsed = urlsplit(value)
+                        port = parsed.port
+                        valid = (
+                            parsed.scheme == "https" and parsed.hostname
+                            and not parsed.username and not parsed.password
+                            and not parsed.query and not parsed.fragment
+                            and parsed.path in {"", "/"}
+                            and not any(char.isspace() for char in value)
+                        )
+                    except ValueError:
+                        valid = False
+                    if not valid:
+                        errors.append(f"{path}.gitlab_url: ожидается HTTPS-адрес сервера без пути, например https://gitlab.example.com")
+                elif field == "token_env" and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", value):
+                    errors.append(f"{path}.token_env: ожидается имя переменной окружения, например GITLAB_TOKEN")
+                elif field == "prerelease_pattern":
+                    try:
+                        re.compile(value)
+                    except re.error:
+                        errors.append(f"{path}.prerelease_pattern: некорректное регулярное выражение")
             channel = software.get("channel")
             if isinstance(channel, str) and channel not in {"stable", "prerelease"}:
                 errors.append(f"{path}.channel: допустимы stable и prerelease")
             repository = software.get("repository")
+            repository_pattern = r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+"
+            if provider == "gitlab":
+                repository_pattern = r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+"
             if isinstance(repository, str) and (
-                not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository)
+                not re.fullmatch(repository_pattern, repository)
                 or any(part in {".", ".."} for part in repository.split("/"))
             ):
-                errors.append(f"{path}.repository: ожидается owner/repository, например XTLS/Xray-core")
+                example = "group/subgroup/project" if provider == "gitlab" else "owner/repository"
+                errors.append(f"{path}.repository: ожидается путь {example}, без URL")
 
     if errors:
         raise ConfigError("Ошибки в config.yaml:\n" + "\n".join(f"- {error}" for error in errors))

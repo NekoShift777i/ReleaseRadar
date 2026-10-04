@@ -1,4 +1,4 @@
-from providers.github import get_latest_release
+from providers import get_latest_release
 from logger import setup_logging
 from config import load_config, load_telegram_config
 from config_validation import ConfigError
@@ -9,6 +9,9 @@ from telegram_notifier import send_update_notification
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler
 from telegram_handlers import handle_version_updated, handle_status
 from scheduler import get_check_interval, run_periodic_checks
+from shutdown import ShutdownController, handle_console_interrupt, keep_signal_loop_responsive
+from providers.base import CheckCancelled
+from threading import Event
 from database import (
     initialize_database, 
     get_or_create_software_state,
@@ -24,10 +27,12 @@ logger = logging.getLogger("main")
 
 
 
-def check_updates(config: dict) -> list[UpdateResult]:
+def check_updates(config: dict, stop_event: Event | None = None) -> list[UpdateResult]:
     results: list[UpdateResult] = []
 
     for software in config["software"]:
+        if stop_event is not None and stop_event.is_set():
+            break
         if not software["enabled"]:
             logger.info(
                 "%s is disabled",
@@ -47,14 +52,9 @@ def check_updates(config: dict) -> list[UpdateResult]:
                 state["current_version"]
             )
 
-            include_prerelease = (
-                software["channel"] == "prerelease"
-            )
-
-            release = get_latest_release(
-                    software["repository"],
-                    include_prerelease=include_prerelease,
-                )
+            release = get_latest_release(software, stop_event=stop_event)
+            if stop_event is not None and stop_event.is_set():
+                break
 
             logger.info(
                 "%s latest version: %s",
@@ -115,7 +115,12 @@ def check_updates(config: dict) -> list[UpdateResult]:
 
             results.append(result)
 
+        except CheckCancelled:
+            logger.info("Release check stopped")
+            break
         except Exception:
+            if stop_event is not None and stop_event.is_set():
+                break
             logger.exception(
                 "Failed to check %s",
                 software["name"],
@@ -130,8 +135,11 @@ async def send_pending_notifications(
         application: Application,
         chat_id: int,
         pending_notifications: list[UpdateResult],
+        stop_event: Event | None = None,
 ) -> None:
     for result in pending_notifications:
+        if stop_event is not None and stop_event.is_set():
+            break
         try:
             state = get_software_state(result.software_id)
             if state is None or not should_notify(
@@ -167,27 +175,35 @@ def main() -> None:
 
     telegram_token, telegram_chat_id = load_telegram_config()
     initialize_database()
+    shutdown = ShutdownController()
 
     async def post_init(application: Application) -> None:
         stop_event = asyncio.Event()
+        shutdown.bind(stop_event)
+        if shutdown.worker_stop.is_set():
+            stop_event.set()
 
         async def check_once() -> None:
             logger.info("Update check cycle started")
-            results = await asyncio.to_thread(check_updates, config)
-            if stop_event.is_set():
+            results = await asyncio.to_thread(check_updates, config, shutdown.worker_stop)
+            if shutdown.worker_stop.is_set():
                 return
             await send_pending_notifications(
                 application, telegram_chat_id, get_pending_notifications(results),
+                shutdown.worker_stop,
             )
             logger.info("Update check cycle finished; next check in %s seconds", interval)
 
         application.bot_data["check_stop_event"] = stop_event
+        application.bot_data["signal_task"] = asyncio.create_task(keep_signal_loop_responsive(stop_event))
         application.bot_data["check_task"] = asyncio.create_task(
             run_periodic_checks(check_once, stop_event, interval),
             name="release-radar-checks",
         )
 
     async def post_stop(application: Application) -> None:
+        logger.info("Stopping ReleaseRadar; waiting for any active request to finish")
+        shutdown.request_stop()
         stop_event = application.bot_data.get("check_stop_event")
         task = application.bot_data.get("check_task")
         if stop_event is not None:
@@ -195,6 +211,9 @@ def main() -> None:
         if task is not None:
             # Let an in-flight worker finish before shutting down the bot/database.
             await task
+        signal_task = application.bot_data.get("signal_task")
+        if signal_task is not None:
+            await signal_task
 
     application = (
         Application.builder()
@@ -217,7 +236,9 @@ def main() -> None:
 
     logger.info("Telegram bot started")
 
-    application.run_polling()
+    with handle_console_interrupt(application, shutdown):
+        application.run_polling(stop_signals=None)
+    logger.info("ReleaseRadar stopped")
 
 if __name__ == "__main__":
     try:

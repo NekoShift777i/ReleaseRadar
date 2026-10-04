@@ -7,3 +7,10 @@ software:
     channel: prerelease
     current_version: test-version
     enabled: true
+  - id: crafty4
+    name: Crafty Controller 4
+    provider: gitlab
+    repository: crafty-controller/crafty-4
+    channel: stable
+    current_version: 4.10.8
+    enabled: true
