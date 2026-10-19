@@ -5,28 +5,28 @@ software:
     provider: github
     repository: XTLS/Xray-core
     channel: prerelease
-    current_version: test-version
+    current_version: 26.10.10
     enabled: true
   - id: crafty4
     name: Crafty Controller 4
     provider: gitlab
     repository: crafty-controller/crafty-4
     channel: stable
-    current_version: 4.10.8
+    current_version: 4.11.0
     enabled: true
   - id: 3x-ui
     name: 3x-ui
     provider: github
     repository: MHSanaei/3x-ui
     channel: stable
-    current_version: v3.8.5
+    current_version: v3.10.2
     enabled: true
   - id: sing-box
     name: sing-box
     provider: github
     repository: SagerNet/sing-box
     channel: stable
-    current_version: 1.14.2
+    current_version: 1.14.3
     enabled: true
   - id: nextcloud-server
     name: Nextcloud Server
@@ -40,14 +40,14 @@ software:
     provider: github
     repository: home-assistant/core
     channel: stable
-    current_version: 2026.9.4
+    current_version: 2026.10.1
     enabled: true
   - id: uptime-kuma
     name: Uptime Kuma
     provider: github
     repository: louislam/uptime-kuma
     channel: stable
-    current_version: 2.5.5
+    current_version: 2.5.6
     enabled: true
   - id: nekobox
     name: Nekobox
@@ -68,19 +68,19 @@ software:
     provider: github
     repository: Flowseal/tg-ws-proxy
     channel: stable
-    current_version: TG WS Proxy v1.10.4
+    current_version: v1.11.2
     enabled: true
-  - id: morphe-pathes
+  - id: morphe-patches
     name: Morphe Patches
     provider: github
     repository: MorpheApp/morphe-patches
     channel: prerelease
-    current_version: v1.45.0
+    current_version: v1.48.0-dev.12
     enabled: true
   - id: morphe-manager
     name: Morphe Manager for Android
     provider: github
     repository: MorpheApp/morphe-manager
     channel: prerelease
-    current_version: v1.33.0-dev.1
+    current_version: v2.0.0-dev.8
     enabled: true
