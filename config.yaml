@@ -84,3 +84,10 @@ software:
     channel: prerelease
     current_version: v2.0.0-dev.8
     enabled: true
+  - id: obsidian-lockstep-sync
+    name: Lockstep Sync for Obsidian
+    provider: github
+    repository: stephansergeev/obsidian-lockstep-sync
+    channel: stable
+    current_version: unknown
+    enabled: true
