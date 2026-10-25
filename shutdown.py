@@ -37,22 +37,34 @@ async def keep_signal_loop_responsive(stop_event: asyncio.Event) -> None:
 
 @contextmanager
 def handle_console_interrupt(application, controller: ShutdownController):
-    previous = signal.getsignal(signal.SIGINT)
+    signals = (signal.SIGINT, signal.SIGTERM)
+    previous_handlers = {
+        sig: signal.getsignal(sig) for sig in signals
+    }
 
     def interrupt(signum, frame):
         if not controller.request_stop():
-            return  # Do not interrupt cleanup with a second Ctrl+C.
+            return
+
         if controller.loop is not None and application.running:
             def stop_application():
-                logger.info("Shutdown requested; stopping new update checks")
+                logger.info(
+                    "Shutdown requested (%s); stopping new update checks",
+                    signal.Signals(signum).name,
+                )
                 application.stop_running()
+
             controller.loop.call_soon_threadsafe(stop_application)
         else:
-            # run_polling handles KeyboardInterrupt during initialization.
+            # Allow run_polling to clean up during initialization.
             raise KeyboardInterrupt
 
-    signal.signal(signal.SIGINT, interrupt)
     try:
+        for sig in signals:
+            signal.signal(sig, interrupt)
+
         yield
+
     finally:
-        signal.signal(signal.SIGINT, previous)
+        for sig, previous in previous_handlers.items():
+            signal.signal(sig, previous)
