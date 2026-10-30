@@ -91,3 +91,18 @@ software:
     channel: stable
     current_version: unknown
     enabled: true
+  - id: nbt-studio
+    name: NBT Studio
+    provider: github
+    repository: tryashtar/nbt-studio
+    channel: stable
+    current_version: v1.15.3
+    enabled: true
+  - id: mca-selector
+    name: MCA Selector
+    provider: github
+    repository: Querz/mcaselector
+    channel: stable
+    current_version: 2.9
+    enabled: true
+
