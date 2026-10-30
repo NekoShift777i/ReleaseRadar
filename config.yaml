@@ -103,6 +103,6 @@ software:
     provider: github
     repository: Querz/mcaselector
     channel: stable
-    current_version: 2.9
+    current_version: "2.9"
     enabled: true
 
