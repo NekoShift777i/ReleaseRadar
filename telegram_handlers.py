@@ -5,7 +5,10 @@ import re
 from telegram import Update
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
-from database import get_notification_button, mark_version_updated
+from database import get_notification_button, mark_version_updated, get_software_state
+from providers import get_latest_release
+from telegram_notifier import send_update_notification
+from update_logic import UpdateResult
 from status import get_status_messages
 
 logger = logging.getLogger(__name__)
@@ -104,3 +107,53 @@ async def handle_version_updated(
         await query.edit_message_reply_markup(reply_markup=None)
     except TelegramError:
         logger.warning("Cannot remove notification button", exc_info=True)
+
+
+async def handle_pending(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Resend outstanding notifications without confirming or marking them notified."""
+    message = update.effective_message
+    chat = update.effective_chat
+    if message is None or chat is None or chat.id != context.bot_data.get("telegram_chat_id"):
+        return
+
+    config = context.bot_data["config"]
+    pending = []
+    for software in config["software"]:
+        if not software["enabled"]:
+            continue
+        state = await asyncio.to_thread(get_software_state, software["id"])
+        if (state is not None and state["latest_version"] is not None
+                and state["current_version"] != state["latest_version"]):
+            pending.append(software)
+
+    if not pending:
+        await message.reply_text("Неподтверждённых обновлений нет.", parse_mode=None)
+        return
+
+    sent = failed = skipped = 0
+    for software in pending:
+        try:
+            # Fetch a fresh release URL; do not modify the database's check state.
+            release = await asyncio.to_thread(get_latest_release, software)
+            state = await asyncio.to_thread(get_software_state, software["id"])
+            if (state is None or state["current_version"] == state["latest_version"]
+                    or state["latest_version"] != release.version):
+                skipped += 1
+                continue
+            result = UpdateResult(
+                software_id=software["id"], software_name=software["name"],
+                current_version=state["current_version"],
+                latest_version=state["latest_version"], release_url=release.url,
+                update_available=True, notify_required=False,
+            )
+            await send_update_notification(context.bot, chat.id, result)
+            sent += 1
+        except Exception:
+            failed += 1
+            logger.exception("Failed to resend notification for %s", software["name"])
+
+    await message.reply_text(
+        f"Повторных уведомлений отправлено: {sent}.\n"
+        f"Пропущено (версия изменилась): {skipped}.\n"
+        f"Ошибок: {failed}.", parse_mode=None,
+    )

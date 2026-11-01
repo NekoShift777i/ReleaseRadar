@@ -6,8 +6,9 @@ from datetime import datetime, timezone
 from update_logic import should_notify, UpdateResult
 from notifications import get_pending_notifications
 from telegram_notifier import send_update_notification
+from telegram import BotCommand
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler
-from telegram_handlers import handle_version_updated, handle_status, handle_check
+from telegram_handlers import handle_version_updated, handle_status, handle_check, handle_pending
 from scheduler import get_check_interval, run_periodic_checks, ManualCheckRequests
 from shutdown import ShutdownController, handle_console_interrupt, keep_signal_loop_responsive
 from providers.base import CheckCancelled
@@ -182,6 +183,11 @@ def main() -> None:
     shutdown = ShutdownController()
 
     async def post_init(application: Application) -> None:
+        await application.bot.set_my_commands([
+            BotCommand("status", "Состояние отслеживаемых программ"),
+            BotCommand("check", "Проверить наличие обновлений"),
+            BotCommand("pending", "Повторить неподтверждённые уведомления"),
+        ])
         stop_event = asyncio.Event()
         shutdown.bind(stop_event)
         if shutdown.worker_stop.is_set():
@@ -243,6 +249,7 @@ def main() -> None:
     application.bot_data["telegram_chat_id"] = telegram_chat_id
     application.add_handler(CommandHandler("status", handle_status))
     application.add_handler(CommandHandler("check", handle_check))
+    application.add_handler(CommandHandler("pending", handle_pending))
 
     application.add_handler(
         CallbackQueryHandler(
