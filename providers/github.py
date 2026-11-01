@@ -3,6 +3,7 @@ from threading import Event
 
 import httpx
 import logging
+import os
 
 GITHUB_API_URL = "https://api.github.com"
 
@@ -30,16 +31,33 @@ def get_latest_release(
     else:
         url = f"{GITHUB_API_URL}/repos/{repository}/releases/latest"
 
+    token = os.getenv("GITHUB_TOKEN", "").strip()
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
     try:
         response = httpx.get(
             url,
-            headers={
-                "Accept": "application/vnd.github+json",
-                "X-GitHub-Api-Version": "2022-11-28",
-            },
+            headers=headers,
             timeout=10.0,
         )
         raise_if_stopping(stop_event)
+        if token and response.status_code == 401:
+            raise RuntimeError(
+                "GitHub отклонил GITHUB_TOKEN (HTTP 401). "
+                "Проверьте ключ в .env; значение ключа не записывается в журнал."
+            )
+        if response.status_code in (403, 429):
+            remaining = response.headers.get("X-RateLimit-Remaining")
+            if remaining == "0":
+                raise RuntimeError(
+                    "Превышен лимит запросов GitHub API "
+                    f"(HTTP {response.status_code})."
+                )
         response.raise_for_status()
 
         data = response.json()
