@@ -32,6 +32,16 @@ def validate_config(config: Any) -> dict[str, Any]:
         gitlab_optional = {"gitlab_url", "token_env", "prerelease_pattern"}
         for index, software in enumerate(software_list):
             path = f"software[{index}]"
+            if isinstance(software, dict):
+                name = software.get("name")
+                identifier = software.get("id")
+                details = []
+                if isinstance(name, str) and name.strip():
+                    details.append(f"название: {name.strip()!r}")
+                if isinstance(identifier, str) and identifier.strip():
+                    details.append(f"id: {identifier.strip()!r}")
+                if details:
+                    path += " (" + ", ".join(details) + ")"
             if not isinstance(software, dict):
                 errors.append(f"{path}: ожидается набор полей программы")
                 continue
