@@ -113,7 +113,7 @@ software:
     current_version: v0.0.23
     enabled: true
   - id: beamng-earth
-    name: Mod BeamNG.Eatrh for BeamNG.drive game
+    name: Mod BeamNG.Earth for BeamNG.drive game
     provider: github
     repository: TecnaGamer/BeamNG.Earth
     channel: stable
