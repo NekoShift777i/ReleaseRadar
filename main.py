@@ -7,6 +7,7 @@ from update_logic import should_notify, is_newer_version, UpdateResult
 from notifications import get_pending_notifications
 from telegram_notifier import send_update_notification
 from telegram import BotCommand
+from telegram.error import NetworkError
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler
 from telegram_handlers import handle_version_updated, handle_status, handle_check, handle_pending
 from scheduler import get_check_interval, run_periodic_checks, ManualCheckRequests
@@ -171,6 +172,28 @@ async def send_pending_notifications(
     return sent, failed
 
 
+
+async def handle_telegram_error(update, context) -> None:
+    error = context.error
+
+    if isinstance(error, NetworkError):
+        logger.warning(
+            "Временная сетевая ошибка Telegram: %s: %s",
+            type(error).__name__,
+            error,
+        )
+        return
+
+    logger.error(
+        "Неожиданная ошибка Telegram",
+        exc_info=(
+            type(error),
+            error,
+            error.__traceback__,
+        ) if error is not None else None,
+    )
+
+
 def main() -> None:
     setup_logging()
     logger.info("ReleaseRadar started")
@@ -247,6 +270,7 @@ def main() -> None:
 
     application.bot_data["config"] = config
     application.bot_data["telegram_chat_id"] = telegram_chat_id
+    application.add_error_handler(handle_telegram_error)
     application.add_handler(CommandHandler("status", handle_status))
     application.add_handler(CommandHandler("check", handle_check))
     application.add_handler(CommandHandler("pending", handle_pending))
