@@ -36,7 +36,7 @@ software:
     current_version: v35.0.1
     enabled: true
   - id: home-assistant
-    name: Home Assitant
+    name: Home Assistant
     provider: github
     repository: home-assistant/core
     channel: stable
