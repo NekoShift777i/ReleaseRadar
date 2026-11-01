@@ -3,7 +3,7 @@ from logger import setup_logging
 from config import load_config, load_telegram_config
 from config_validation import ConfigError
 from datetime import datetime, timezone
-from update_logic import should_notify, UpdateResult
+from update_logic import should_notify, is_newer_version, UpdateResult
 from notifications import get_pending_notifications
 from telegram_notifier import send_update_notification
 from telegram import BotCommand
@@ -69,7 +69,7 @@ def check_updates(config: dict, stop_event: Event | None = None) -> list[UpdateR
                 continue
 
             update_available = (
-                state["current_version"] != release.version
+                is_newer_version(state["current_version"], release.version)
             )
 
             if update_available:
