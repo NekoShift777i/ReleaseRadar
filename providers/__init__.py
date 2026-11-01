@@ -8,7 +8,12 @@ def get_latest_release(software: dict, *, stop_event: Event | None = None) -> Re
     provider = software["provider"]
     stop_options = {"stop_event": stop_event} if stop_event is not None else {}
     if provider == "github":
-        return github.get_latest_release(software["repository"], include_prerelease, **stop_options)
+        return github.get_latest_release(
+        software["repository"],
+        include_prerelease,
+        release_filter=software.get("release_filter", "strict"),
+        **stop_options,
+    )
     if provider == "gitlab":
         return gitlab.get_latest_release(
             software["repository"], include_prerelease,

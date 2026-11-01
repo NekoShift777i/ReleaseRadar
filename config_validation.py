@@ -30,6 +30,7 @@ def validate_config(config: Any) -> dict[str, Any]:
         ids = set()
         required = {"id", "name", "provider", "repository", "channel", "current_version", "enabled"}
         gitlab_optional = {"gitlab_url", "token_env", "prerelease_pattern"}
+        github_optional = {"release_filter"}
         for index, software in enumerate(software_list):
             path = f"software[{index}]"
             if isinstance(software, dict):
@@ -45,7 +46,7 @@ def validate_config(config: Any) -> dict[str, Any]:
             if not isinstance(software, dict):
                 errors.append(f"{path}: ожидается набор полей программы")
                 continue
-            unknown_fields(software, required | gitlab_optional, path)
+            unknown_fields(software, required | gitlab_optional | github_optional, path)
             for field in sorted(required):
                 if field not in software:
                     errors.append(f"{path}.{field}: обязательное поле отсутствует")
@@ -67,6 +68,18 @@ def validate_config(config: Any) -> dict[str, Any]:
             provider = software.get("provider")
             if isinstance(provider, str) and provider not in {"github", "gitlab"}:
                 errors.append(f"{path}.provider: допустимы github и gitlab")
+            if "release_filter" in software:
+                if provider != "github":
+                    errors.append(
+                        f"{path}.release_filter: поле доступно только для github"
+                    )
+                release_filter = software["release_filter"]
+                if not isinstance(release_filter, str) or release_filter not in {
+                    "strict", "github", "version"
+                }:
+                    errors.append(
+                        f"{path}.release_filter: допустимы strict, github и version"
+                    )
             for field in sorted(gitlab_optional & software.keys()):
                 if provider != "gitlab":
                     errors.append(f"{path}.{field}: поле доступно только для gitlab")

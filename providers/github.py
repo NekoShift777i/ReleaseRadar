@@ -17,10 +17,36 @@ def _version(tag: str) -> Version | None:
         return None
 
 
+
+def _is_allowed_release(
+    item: dict,
+    include_prerelease: bool,
+    release_filter: str,
+) -> bool:
+    if item.get("draft"):
+        return False
+
+    if include_prerelease:
+        return True
+
+    github_prerelease = bool(item.get("prerelease"))
+    version = _version(item.get("tag_name", ""))
+    version_prerelease = version.is_prerelease if version is not None else False
+
+    if release_filter == "github":
+        return not github_prerelease
+
+    if release_filter == "version":
+        return not version_prerelease
+
+    return not github_prerelease and not version_prerelease
+
+
 def get_latest_release(
     repository: str,
     include_prerelease: bool = False,
     *,
+    release_filter: str = "strict",
     stop_event: Event | None = None,
 ) -> Release:
     raise_if_stopping(stop_event)
@@ -30,6 +56,9 @@ def get_latest_release(
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
     }
+    if release_filter not in {"strict", "github", "version"}:
+        raise ValueError(f"Неизвестный режим фильтрации выпусков: {release_filter}")
+
     if token:
         headers["Authorization"] = f"Bearer {token}"
 
@@ -56,12 +85,11 @@ def get_latest_release(
                     raise RuntimeError("GitHub вернул неожиданный формат списка выпусков")
                 candidates.extend(
                     item for item in batch
-                    if not item.get("draft")
-                    and (include_prerelease or not item.get("prerelease"))
-                    and (include_prerelease or not (
-                        (v := _version(item.get("tag_name", ""))) is not None
-                        and v.is_prerelease
-                    ))
+                    if _is_allowed_release(
+                        item,
+                        include_prerelease,
+                        release_filter,
+                    )
                 )
                 if len(batch) < 100:
                     break

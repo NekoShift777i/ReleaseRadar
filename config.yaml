@@ -117,6 +117,7 @@ software:
     provider: github
     repository: TecnaGamer/BeamNG.Earth
     channel: stable
+    release_filter: github
     current_version: v1.6.1-beta
     enabled: true
 
