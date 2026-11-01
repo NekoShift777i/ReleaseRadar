@@ -105,4 +105,11 @@ software:
     channel: stable
     current_version: "2.9"
     enabled: true
+  - id: hushtelegram
+    name: HushTelegram Patches
+    provider: github
+    repository: SysAdminDoc/HushTelegram
+    channel: stable
+    current_version: v0.0.23
+    enabled: true
 
