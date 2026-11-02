@@ -123,6 +123,7 @@ software:
   - id: actual-budget
     name: Actual Budget
     provider: github
+    repository: actualbudget/actual
     channel: stable
     current_version: 26.10.0
     enabled: true
