@@ -120,4 +120,10 @@ software:
     release_filter: github
     current_version: v1.6.1-beta
     enabled: true
+  - id: actual-budget
+    name: Actual Budget
+    provider: github
+    channel: stable
+    current_version: 26.10.0
+    enabled: true
 
