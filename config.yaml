@@ -127,4 +127,11 @@ software:
     channel: stable
     current_version: 26.10.0
     enabled: true
+  - id: frigate
+    name: Frigate NVR
+    provider: github
+    repository: blakeblackshear/frigate
+    channel: stable
+    current_version: v0.18.0
+    enabled: true
 
