@@ -2,7 +2,7 @@ import logging
 import asyncio
 import re
 
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 from database import get_notification_button, mark_version_updated, get_software_state
@@ -30,35 +30,83 @@ def is_authorized(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     )
 
 
+def build_check_keyboard(config: dict) -> InlineKeyboardMarkup:
+    """Present enabled software without embedding arbitrary IDs in callback data."""
+    enabled = [item for item in config["software"] if item["enabled"]]
+    rows = [
+        [InlineKeyboardButton(item["name"], callback_data=f"check_select:{index}")]
+        for index, item in enumerate(enabled)
+    ]
+    rows.append([InlineKeyboardButton("🔄 Проверить все", callback_data="check_all")])
+    return InlineKeyboardMarkup(rows)
+
+
 async def handle_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     message = update.effective_message
-    chat = update.effective_chat
     if message is None or not is_authorized(update, context):
         return
-    requests = context.bot_data.get("manual_checks")
-    if requests is None:
+    if context.bot_data.get("manual_checks") is None:
         await message.reply_text("Бот ещё запускается. Попробуйте чуть позже.", parse_mode=None)
         return
-    if not any(software["enabled"] for software in context.bot_data["config"]["software"]):
+    if not any(item["enabled"] for item in context.bot_data["config"]["software"]):
         await message.reply_text("Нет включённых программ для проверки.", parse_mode=None)
         return
+    await message.reply_text(
+        "Выберите программу для проверки:",
+        reply_markup=build_check_keyboard(context.bot_data["config"]),
+        parse_mode=None,
+    )
 
+
+async def handle_check_selection(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    if query is None:
+        return
+    if not is_authorized(update, context):
+        await query.answer("Доступ запрещён.", show_alert=True)
+        return
+    data = query.data
+    if not isinstance(data, str):
+        await query.answer("Недействительная кнопка.", show_alert=True)
+        return
+    config = context.bot_data["config"]
+    enabled = [item for item in config["software"] if item["enabled"]]
+    if data == "check_all":
+        software_id = None
+        label = "всех программ"
+    else:
+        match = re.fullmatch(r"check_select:([0-9]+)", data)
+        if match is None or int(match.group(1)) >= len(enabled):
+            await query.answer("Кнопка устарела. Откройте /check заново.", show_alert=True)
+            return
+        item = enabled[int(match.group(1))]
+        software_id = item["id"]
+        label = item["name"]
+
+    requests = context.bot_data.get("manual_checks")
+    if requests is None:
+        await query.answer("Бот ещё запускается.", show_alert=True)
+        return
     acknowledged = asyncio.Event()
 
     async def send_result(text: str) -> None:
         await acknowledged.wait()
-        await message.reply_text(text, parse_mode=None)
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id, text=text, parse_mode=None
+        )
 
-    decision = requests.request(send_result)
-    answer = {
-        "accepted": "Проверка запрошена. Сообщу результат после завершения.",
+    decision = requests.request(send_result, software_id=software_id)
+    answers = {
+        "accepted": f"Запрошена проверка {label}. Сообщу результат после завершения.",
         "busy": "Проверка уже выполняется или запрошена. Вторую не запускаю.",
         "stopping": "Бот останавливается. Новая проверка не запущена.",
-    }[decision]
+    }
     try:
-        await message.reply_text(answer, parse_mode=None)
+        await query.answer(answers[decision], show_alert=decision != "accepted")
+        if decision == "accepted":
+            await query.edit_message_reply_markup(reply_markup=None)
     except TelegramError:
-        logger.warning("Failed to acknowledge manual check", exc_info=True)
+        logger.warning("Failed to acknowledge selected check", exc_info=True)
     finally:
         acknowledged.set()
 

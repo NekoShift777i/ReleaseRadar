@@ -9,7 +9,7 @@ from telegram_notifier import send_update_notification
 from telegram import BotCommand
 from telegram.error import NetworkError
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler
-from telegram_handlers import handle_version_updated, handle_status, handle_check, handle_pending
+from telegram_handlers import handle_version_updated, handle_status, handle_check, handle_pending, handle_check_selection
 from scheduler import get_check_interval, run_periodic_checks, ManualCheckRequests
 from shutdown import ShutdownController, handle_console_interrupt, keep_signal_loop_responsive
 from providers.base import CheckCancelled
@@ -37,12 +37,15 @@ def check_updates(
     stop_event: Event | None = None,
     check_locks: SoftwareCheckLocks | None = None,
     skipped_busy: set[str] | None = None,
+    software_id: str | None = None,
 ) -> list[UpdateResult]:
     results: list[UpdateResult] = []
     if check_locks is None:
         check_locks = SoftwareCheckLocks()
 
     for software in config["software"]:
+        if software_id is not None and software["id"] != software_id:
+            continue
         if stop_event is not None and stop_event.is_set():
             break
         if not software["enabled"]:
@@ -238,11 +241,11 @@ def main() -> None:
         if shutdown.worker_stop.is_set():
             stop_event.set()
 
-        async def check_once() -> str | None:
+        async def check_once(software_id: str | None = None) -> str | None:
             logger.info("Update check cycle started")
             skipped_busy: set[str] = set()
             results = await asyncio.to_thread(
-                check_updates, config, shutdown.worker_stop, check_locks, skipped_busy
+                check_updates, config, shutdown.worker_stop, check_locks, skipped_busy, software_id
             )
             if shutdown.worker_stop.is_set():
                 return
@@ -251,7 +254,10 @@ def main() -> None:
                 shutdown.worker_stop,
             )
             logger.info("Update check cycle finished; next check in %s seconds", interval)
-            enabled_count = sum(software["enabled"] for software in config["software"])
+            enabled_count = sum(
+                software["enabled"] and (software_id is None or software["id"] == software_id)
+                for software in config["software"]
+            )
             check_errors = enabled_count - len(results) - len(skipped_busy)
             return (
                 "Проверка завершена.\n"
@@ -301,6 +307,7 @@ def main() -> None:
     application.add_handler(CommandHandler("status", handle_status))
     application.add_handler(CommandHandler("check", handle_check))
     application.add_handler(CommandHandler("pending", handle_pending))
+    application.add_handler(CallbackQueryHandler(handle_check_selection, pattern=r"^(?:check_all|check_select:)"))
 
     application.add_handler(
         CallbackQueryHandler(

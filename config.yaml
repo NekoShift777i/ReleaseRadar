@@ -141,5 +141,5 @@ software:
     repository: unknown/unknown
     channel: stable
     current_version: unknown
-    enabled: true
+    enabled: false
 

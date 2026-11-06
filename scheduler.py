@@ -13,24 +13,30 @@ class ManualCheckRequests:
         self.running = True  # The initial cycle is already reserved.
         self.pending = False
         self.completion = None
+        self.software_id: str | None = None
 
-    def request(self, completion: Callable[[str], Awaitable[None]]) -> str:
+    def request(
+        self, completion: Callable[[str], Awaitable[None]], software_id: str | None = None
+    ) -> str:
         if self.stop_event.is_set():
             return "stopping"
         if self.running or self.pending:
             return "busy"
         self.pending = True
         self.completion = completion
+        self.software_id = software_id
         self.wake.set()
         return "accepted"
 
     def begin_cycle(self):
         self.running = True
         completion = self.completion
+        software_id = self.software_id
         self.completion = None
+        self.software_id = None
         self.pending = False
         self.wake.clear()
-        return completion
+        return completion, software_id
 
 
 async def wait_for_next_check(stop_event, interval, manual_requests):
@@ -58,16 +64,16 @@ def get_check_interval(config: dict) -> int:
 
 
 async def run_periodic_checks(
-    check_once: Callable[[], Awaitable[str | None]],
+    check_once: Callable[[str | None], Awaitable[str | None]],
     stop_event: asyncio.Event,
     interval: int,
     manual_requests: ManualCheckRequests | None = None,
 ) -> None:
     """Run immediately, then wait after each completed cycle. Never overlap."""
     while not stop_event.is_set():
-        completion = manual_requests.begin_cycle() if manual_requests else None
+        completion, software_id = manual_requests.begin_cycle() if manual_requests else (None, None)
         try:
-            result = await check_once()
+            result = await check_once(software_id)
         except Exception:
             logger.exception("Update check cycle failed; will retry next cycle")
             result = "Не удалось завершить проверку. Подробности — в журнале."
