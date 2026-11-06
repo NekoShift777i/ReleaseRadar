@@ -307,7 +307,7 @@ def main() -> None:
     application.add_handler(CommandHandler("status", handle_status))
     application.add_handler(CommandHandler("check", handle_check))
     application.add_handler(CommandHandler("pending", handle_pending))
-    application.add_handler(CallbackQueryHandler(handle_check_selection, pattern=r"^(?:check_all|check_select:)"))
+    application.add_handler(CallbackQueryHandler(handle_check_selection, pattern=r"^(?:check_all$|check_cancel$|check_select:|check_page:|check_page_info$)"))
 
     application.add_handler(
         CallbackQueryHandler(

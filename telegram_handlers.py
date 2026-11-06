@@ -30,14 +30,30 @@ def is_authorized(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     )
 
 
-def build_check_keyboard(config: dict) -> InlineKeyboardMarkup:
-    """Present enabled software without embedding arbitrary IDs in callback data."""
+CHECK_PAGE_SIZE = 8
+
+
+def build_check_keyboard(config: dict, page: int = 0) -> InlineKeyboardMarkup:
+    """Show one page of enabled programs; keep selection indices stable."""
     enabled = [item for item in config["software"] if item["enabled"]]
+    page_count = max(1, (len(enabled) + CHECK_PAGE_SIZE - 1) // CHECK_PAGE_SIZE)
+    if page < 0 or page >= page_count:
+        raise ValueError("Invalid check page")
+    start = page * CHECK_PAGE_SIZE
     rows = [
         [InlineKeyboardButton(item["name"], callback_data=f"check_select:{index}")]
-        for index, item in enumerate(enabled)
+        for index, item in enumerate(enabled[start:start + CHECK_PAGE_SIZE], start)
     ]
+    if page_count > 1:
+        navigation = []
+        if page > 0:
+            navigation.append(InlineKeyboardButton("◀️ Назад", callback_data=f"check_page:{page - 1}"))
+        navigation.append(InlineKeyboardButton(f"{page + 1}/{page_count}", callback_data="check_page_info"))
+        if page + 1 < page_count:
+            navigation.append(InlineKeyboardButton("Далее ▶️", callback_data=f"check_page:{page + 1}"))
+        rows.append(navigation)
     rows.append([InlineKeyboardButton("🔄 Проверить все", callback_data="check_all")])
+    rows.append([InlineKeyboardButton("❌ Отмена", callback_data="check_cancel")])
     return InlineKeyboardMarkup(rows)
 
 
@@ -71,6 +87,30 @@ async def handle_check_selection(update: Update, context: ContextTypes.DEFAULT_T
         return
     config = context.bot_data["config"]
     enabled = [item for item in config["software"] if item["enabled"]]
+    if data == "check_cancel":
+        await query.answer("Выбор проверки отменён.")
+        try:
+            await query.edit_message_reply_markup(reply_markup=None)
+        except TelegramError:
+            logger.warning("Failed to close check selection", exc_info=True)
+        return
+    if data == "check_page_info":
+        await query.answer()
+        return
+    if data.startswith("check_page:"):
+        match = re.fullmatch(r"check_page:([0-9]+)", data)
+        page_count = max(1, (len(enabled) + CHECK_PAGE_SIZE - 1) // CHECK_PAGE_SIZE)
+        if match is None or int(match.group(1)) >= page_count:
+            await query.answer("Страница устарела. Откройте /check заново.", show_alert=True)
+            return
+        await query.answer()
+        try:
+            await query.edit_message_reply_markup(
+                reply_markup=build_check_keyboard(config, int(match.group(1)))
+            )
+        except TelegramError:
+            logger.warning("Failed to change check page", exc_info=True)
+        return
     if data == "check_all":
         software_id = None
         label = "всех программ"

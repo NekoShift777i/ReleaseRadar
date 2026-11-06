@@ -28,7 +28,7 @@ class CheckSelectionTests(unittest.IsolatedAsyncioTestCase):
     def test_keyboard_only_enabled_and_all(self):
         keyboard = build_check_keyboard(self.config).inline_keyboard
         self.assertEqual([row[0].callback_data for row in keyboard],
-                         ["check_select:0", "check_select:1", "check_all"])
+                         ["check_select:0", "check_select:1", "check_all", "check_cancel"])
 
     async def test_selected_software(self):
         update, context = self.make_context("check_select:1")
