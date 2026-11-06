@@ -13,6 +13,7 @@ from telegram_handlers import handle_version_updated, handle_status, handle_chec
 from scheduler import get_check_interval, run_periodic_checks, ManualCheckRequests
 from shutdown import ShutdownController, handle_console_interrupt, keep_signal_loop_responsive
 from providers.base import CheckCancelled
+from error_messages import describe_check_error
 from threading import Event
 from check_locks import SoftwareCheckLocks
 from database import (
@@ -21,6 +22,7 @@ from database import (
     update_software_check,
     mark_version_notified,
     get_software_state,
+    record_software_error,
 )
 
 import asyncio
@@ -134,13 +136,18 @@ def check_updates(
             except CheckCancelled:
                 logger.info("Release check stopped")
                 break
-            except Exception:
+            except Exception as error:
                 if stop_event is not None and stop_event.is_set():
                     break
-                logger.exception(
-                    "Failed to check %s",
-                    software["name"],
-                )
+                logger.exception("Failed to check %s", software["name"])
+                try:
+                    record_software_error(
+                        software["id"], describe_check_error(error),
+                        datetime.now(timezone.utc).isoformat(),
+                    )
+                except Exception:
+                    logger.exception("Failed to save check error for %s", software["name"])
+
 
     return results
 

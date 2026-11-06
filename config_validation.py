@@ -1,6 +1,7 @@
 import re
 from typing import Any
 from urllib.parse import urlsplit
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 class ConfigError(ValueError):
@@ -18,10 +19,19 @@ def validate_config(config: Any) -> dict[str, Any]:
             if key not in allowed:
                 errors.append(f"{path}: неизвестное поле {key!r}")
 
-    unknown_fields(config, {"software", "check_interval_seconds"}, "config.yaml")
+    unknown_fields(config, {"software", "check_interval_seconds", "timezone"}, "config.yaml")
     interval = config.get("check_interval_seconds", 3600)
     if type(interval) is not int or interval <= 0:
         errors.append("check_interval_seconds: ожидается целое число секунд больше нуля")
+
+    timezone_name = config.get("timezone", "UTC")
+    if not isinstance(timezone_name, str) or not timezone_name or timezone_name != timezone_name.strip():
+        errors.append("timezone: ожидается непустое название часового пояса без пробелов по краям")
+    else:
+        try:
+            ZoneInfo(timezone_name)
+        except (ZoneInfoNotFoundError, ValueError):
+            errors.append(f"timezone: неизвестный часовой пояс {timezone_name!r}")
 
     software_list = config.get("software")
     if not isinstance(software_list, list):

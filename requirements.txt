@@ -9,3 +9,4 @@ python-telegram-bot==22.8
 PyYAML==6.0.3
 typing_extensions==4.16.0
 packaging==25.0
+tzdata==2025.3; sys_platform == "win32"

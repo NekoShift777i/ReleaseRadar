@@ -58,10 +58,16 @@ def initialize_database() -> None:
                 current_version TEXT NOT NULL,
                 latest_version TEXT,
                 last_notified_version TEXT,
-                last_checked_at TEXT
+                last_checked_at TEXT,
+                last_error TEXT,
+                last_error_at TEXT
             )
             """
         )
+        columns = {row["name"] for row in connection.execute("PRAGMA table_info(software_state)")}
+        for column in ("last_error", "last_error_at"):
+            if column not in columns:
+                connection.execute(f"ALTER TABLE software_state ADD COLUMN {column} TEXT")
         if legacy_database:
             # Reissue outstanding legacy notifications with version-bound buttons.
             connection.execute(
@@ -82,7 +88,9 @@ def get_software_state(
                 current_version,
                 latest_version,
                 last_notified_version,
-                last_checked_at
+                last_checked_at,
+                last_error,
+                last_error_at
             FROM software_state
             WHERE software_id = ?
             """,
@@ -148,7 +156,9 @@ def update_software_check(
             UPDATE software_state
             SET
                 latest_version = ?,
-                last_checked_at = ?
+                last_checked_at = ?,
+                last_error = NULL,
+                last_error_at = NULL
             WHERE software_id = ?
             """,
             (
@@ -196,3 +206,11 @@ def mark_version_notified(
                 f"Cannot mark {software_id} as notified: "
                 "software not found"
             )
+
+
+def record_software_error(software_id: str, message: str, occurred_at: str) -> None:
+    with get_connection() as connection:
+        connection.execute(
+            "UPDATE software_state SET last_error = ?, last_error_at = ? WHERE software_id = ?",
+            (message, occurred_at, software_id),
+        )
