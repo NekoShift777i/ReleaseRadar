@@ -10,6 +10,7 @@ from providers import get_latest_release
 from telegram_notifier import send_update_notification
 from update_logic import UpdateResult
 from status import get_status_messages
+from check_locks import SoftwareCheckLocks
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +128,24 @@ async def handle_version_updated(
         logger.warning("Cannot remove notification button", exc_info=True)
 
 
+
+def get_pending_release(software: dict, locks: SoftwareCheckLocks):
+    """Fetch release and recheck stored state under a shared reservation.
+
+    Return (release, state) or None if busy or no longer pending.
+    """
+    with locks.reserve(software["id"]) as acquired:
+        if not acquired:
+            return None
+        release = get_latest_release(software)
+        state = get_software_state(software["id"])
+        if (state is None or state["latest_version"] is None
+                or state["current_version"] == state["latest_version"]
+                or state["latest_version"] != release.version):
+            return None
+        return release, state
+
+
 async def handle_pending(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Resend outstanding notifications without confirming or marking them notified."""
     message = update.effective_message
@@ -148,16 +167,17 @@ async def handle_pending(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await message.reply_text("Неподтверждённых обновлений нет.", parse_mode=None)
         return
 
+    locks = context.bot_data["check_locks"]
     sent = failed = skipped = 0
     for software in pending:
         try:
-            # Fetch a fresh release URL; do not modify the database's check state.
-            release = await asyncio.to_thread(get_latest_release, software)
-            state = await asyncio.to_thread(get_software_state, software["id"])
-            if (state is None or state["current_version"] == state["latest_version"]
-                    or state["latest_version"] != release.version):
+            # Keep network fetch and state validation under the same reservation.
+            # No database writes are performed by /pending.
+            pending_release = await asyncio.to_thread(get_pending_release, software, locks)
+            if pending_release is None:
                 skipped += 1
                 continue
+            release, state = pending_release
             result = UpdateResult(
                 software_id=software["id"], software_name=software["name"],
                 current_version=state["current_version"],
@@ -172,6 +192,6 @@ async def handle_pending(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     await message.reply_text(
         f"Повторных уведомлений отправлено: {sent}.\n"
-        f"Пропущено (версия изменилась): {skipped}.\n"
+        f"Пропущено (занято или версия изменилась): {skipped}.\n"
         f"Ошибок: {failed}.", parse_mode=None,
     )

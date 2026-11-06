@@ -14,6 +14,7 @@ from scheduler import get_check_interval, run_periodic_checks, ManualCheckReques
 from shutdown import ShutdownController, handle_console_interrupt, keep_signal_loop_responsive
 from providers.base import CheckCancelled
 from threading import Event
+from check_locks import SoftwareCheckLocks
 from database import (
     initialize_database, 
     get_or_create_software_state,
@@ -29,8 +30,15 @@ logger = logging.getLogger("main")
 
 
 
-def check_updates(config: dict, stop_event: Event | None = None) -> list[UpdateResult]:
+def check_updates(
+    config: dict,
+    stop_event: Event | None = None,
+    check_locks: SoftwareCheckLocks | None = None,
+    skipped_busy: set[str] | None = None,
+) -> list[UpdateResult]:
     results: list[UpdateResult] = []
+    if check_locks is None:
+        check_locks = SoftwareCheckLocks()
 
     for software in config["software"]:
         if stop_event is not None and stop_event.is_set():
@@ -42,91 +50,97 @@ def check_updates(config: dict, stop_event: Event | None = None) -> list[UpdateR
             )
             continue
 
-        try:
-            state = get_or_create_software_state(
-                    software["id"],
-                    software["current_version"],
+        with check_locks.reserve(software["id"]) as acquired:
+            if not acquired:
+                logger.info("Skipping %s: check already running", software["name"])
+                if skipped_busy is not None:
+                    skipped_busy.add(software["id"])
+                continue
+            try:
+                state = get_or_create_software_state(
+                        software["id"],
+                        software["current_version"],
+                    )
+
+                logger.info(
+                    "%s Current version: %s",
+                    software["name"],
+                    state["current_version"]
                 )
 
-            logger.info(
-                "%s Current version: %s",
-                software["name"],
-                state["current_version"]
-            )
+                release = get_latest_release(software, stop_event=stop_event)
+                if stop_event is not None and stop_event.is_set():
+                    break
 
-            release = get_latest_release(software, stop_event=stop_event)
-            if stop_event is not None and stop_event.is_set():
-                break
-
-            logger.info(
-                "%s latest version: %s",
-                software["name"],
-                release.version,
-            )
-
-            # A button may have been pressed while the GitHub request was running.
-            state = get_software_state(software["id"])
-            if state is None:
-                continue
-
-            update_available = (
-                is_newer_version(state["current_version"], release.version)
-            )
-
-            if update_available:
                 logger.info(
-                    "%s update available: %s -> %s",
+                    "%s latest version: %s",
                     software["name"],
+                    release.version,
+                )
+
+                # A button may have been pressed while the GitHub request was running.
+                state = get_software_state(software["id"])
+                if state is None:
+                    continue
+
+                update_available = (
+                    is_newer_version(state["current_version"], release.version)
+                )
+
+                if update_available:
+                    logger.info(
+                        "%s update available: %s -> %s",
+                        software["name"],
+                        state["current_version"],
+                        release.version,
+                    )
+                else:
+                    logger.info(
+                        "%s is up to date",
+                        software["name"],
+                    )
+
+                update_software_check(
+                    software["id"],
+                    release.version,
+                    datetime.now(timezone.utc).isoformat(),
+                )
+
+                notify_required = should_notify(
                     state["current_version"],
                     release.version,
-                )
-            else:
-                logger.info(
-                    "%s is up to date",
-                    software["name"],
+                    state["last_notified_version"],
                 )
 
-            update_software_check(
-                software["id"],
-                release.version,
-                datetime.now(timezone.utc).isoformat(),
-            )
+                if notify_required:
+                    logger.info(
+                        "Notification required for %s: %s",
+                        software["name"],
+                        release.version,
+                    )
 
-            notify_required = should_notify(
-                state["current_version"],
-                release.version,
-                state["last_notified_version"],
-            )
-
-            if notify_required:
-                logger.info(
-                    "Notification required for %s: %s",
-                    software["name"],
-                    release.version,
+                result = UpdateResult(
+                    software_id=software["id"],
+                    software_name=software["name"],
+                    current_version=state["current_version"],
+                    latest_version=release.version,
+                    release_url=release.url,
+                    update_available=update_available,
+                    notify_required=notify_required,
                 )
 
-            result = UpdateResult(
-                software_id=software["id"],
-                software_name=software["name"],
-                current_version=state["current_version"],
-                latest_version=release.version,
-                release_url=release.url,
-                update_available=update_available,
-                notify_required=notify_required,
-            )
+                results.append(result)
 
-            results.append(result)
-
-        except CheckCancelled:
-            logger.info("Release check stopped")
-            break
-        except Exception:
-            if stop_event is not None and stop_event.is_set():
+            except CheckCancelled:
+                logger.info("Release check stopped")
                 break
-            logger.exception(
-                "Failed to check %s",
-                software["name"],
-            )
+            except Exception:
+                if stop_event is not None and stop_event.is_set():
+                    break
+                logger.exception(
+                    "Failed to check %s",
+                    software["name"],
+                )
 
     return results
 
@@ -204,6 +218,7 @@ def main() -> None:
     telegram_token, telegram_chat_id = load_telegram_config()
     initialize_database()
     shutdown = ShutdownController()
+    check_locks = SoftwareCheckLocks()
 
     async def post_init(application: Application) -> None:
         await application.bot.set_my_commands([
@@ -218,7 +233,10 @@ def main() -> None:
 
         async def check_once() -> str | None:
             logger.info("Update check cycle started")
-            results = await asyncio.to_thread(check_updates, config, shutdown.worker_stop)
+            skipped_busy: set[str] = set()
+            results = await asyncio.to_thread(
+                check_updates, config, shutdown.worker_stop, check_locks, skipped_busy
+            )
             if shutdown.worker_stop.is_set():
                 return
             sent, failed = await send_pending_notifications(
@@ -227,11 +245,12 @@ def main() -> None:
             )
             logger.info("Update check cycle finished; next check in %s seconds", interval)
             enabled_count = sum(software["enabled"] for software in config["software"])
-            check_errors = enabled_count - len(results)
+            check_errors = enabled_count - len(results) - len(skipped_busy)
             return (
                 "Проверка завершена.\n"
                 f"Успешно проверено: {len(results)} из {enabled_count}.\n"
                 f"Ошибок проверки: {check_errors}.\n"
+                f"Пропущено из-за занятости: {len(skipped_busy)}.\n"
                 f"Новых уведомлений отправлено: {sent}.\n"
                 f"Ошибок отправки: {failed}.\n"
                 "Состояние программ: /status"
@@ -268,6 +287,7 @@ def main() -> None:
         .build()
     )
 
+    application.bot_data["check_locks"] = check_locks
     application.bot_data["config"] = config
     application.bot_data["telegram_chat_id"] = telegram_chat_id
     application.add_error_handler(handle_telegram_error)
