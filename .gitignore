@@ -27,3 +27,8 @@ __pycache__/
 
 # Temp Directories
 VersionArchive/
+
+# Git Patches
+*.patch
+Patches/
+Patches

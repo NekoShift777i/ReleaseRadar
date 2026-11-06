@@ -14,10 +14,25 @@ from status import get_status_messages
 logger = logging.getLogger(__name__)
 
 
+def is_authorized(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Allow only the configured owner in a private chat."""
+    user = update.effective_user
+    chat = update.effective_chat
+    allowed_id = context.bot_data.get("telegram_chat_id")
+    return (
+        user is not None
+        and chat is not None
+        and chat.type == "private"
+        and allowed_id is not None
+        and user.id == allowed_id
+        and chat.id == allowed_id
+    )
+
+
 async def handle_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     message = update.effective_message
     chat = update.effective_chat
-    if message is None or chat is None or chat.id != context.bot_data.get("telegram_chat_id"):
+    if message is None or not is_authorized(update, context):
         return
     requests = context.bot_data.get("manual_checks")
     if requests is None:
@@ -53,10 +68,7 @@ async def handle_status(
 ) -> None:
     message = update.effective_message
     chat = update.effective_chat
-    if message is None or chat is None:
-        return
-    # Keep the report in the same chat configured for notifications.
-    if chat.id != context.bot_data.get("telegram_chat_id"):
+    if message is None or not is_authorized(update, context):
         return
     try:
         messages = await asyncio.to_thread(get_status_messages, context.bot_data["config"])
@@ -75,7 +87,13 @@ async def handle_version_updated(
         context: ContextTypes.DEFAULT_TYPE,
 ) -> None:
     query = update.callback_query
-    if query is None or not isinstance(query.data, str):
+    if query is None:
+        return
+    if not is_authorized(update, context):
+        await query.answer("Доступ запрещён.", show_alert=True)
+        return
+    if not isinstance(query.data, str):
+        await query.answer("Недействительная кнопка.", show_alert=True)
         return
     if not query.data.startswith("version_updated:"):
         await query.answer()
@@ -113,7 +131,7 @@ async def handle_pending(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     """Resend outstanding notifications without confirming or marking them notified."""
     message = update.effective_message
     chat = update.effective_chat
-    if message is None or chat is None or chat.id != context.bot_data.get("telegram_chat_id"):
+    if message is None or not is_authorized(update, context):
         return
 
     config = context.bot_data["config"]

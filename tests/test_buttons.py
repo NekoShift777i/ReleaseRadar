@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import database as db
 from telegram.error import BadRequest
-from telegram_handlers import handle_version_updated
+from telegram_handlers import handle_version_updated, is_authorized
 from telegram_notifier import send_update_notification
 from update_logic import UpdateResult
 
@@ -25,16 +25,61 @@ class ButtonTests(unittest.IsolatedAsyncioTestCase):
         db.DATABASE_PATH = self.old_path
         self.temp.cleanup()
 
-    async def press(self, data, edit_error=None):
+    async def press(self, data, edit_error=None, user_id=12345, chat_id=12345, chat_type="private", authorized_id=12345):
         query = SimpleNamespace(
             data=data, answer=AsyncMock(),
             edit_message_reply_markup=AsyncMock(side_effect=edit_error),
         )
-        await handle_version_updated(SimpleNamespace(callback_query=query), None)
+        update = SimpleNamespace(
+            callback_query=query,
+            effective_user=SimpleNamespace(id=user_id) if user_id is not None else None,
+            effective_chat=SimpleNamespace(id=chat_id, type=chat_type) if chat_id is not None else None,
+        )
+        context = SimpleNamespace(bot_data={"telegram_chat_id": authorized_id})
+        await handle_version_updated(update, context)
         return query
 
     def button(self, version="v2"):
         return "version_updated:v1:" + db.create_notification_button("xray", version)
+
+    async def test_unauthorized_user_cannot_confirm(self):
+        data = self.button()
+        query = await self.press(data, user_id=99999)
+        self.assertEqual(db.get_software_state("xray")["current_version"], "v1")
+        query.answer.assert_awaited_once_with("Доступ запрещён.", show_alert=True)
+        query.edit_message_reply_markup.assert_not_awaited()
+
+    async def test_unauthorized_chat_cannot_confirm(self):
+        data = self.button()
+        query = await self.press(data, chat_id=99999)
+        self.assertEqual(db.get_software_state("xray")["current_version"], "v1")
+        query.answer.assert_awaited_once_with("Доступ запрещён.", show_alert=True)
+        query.edit_message_reply_markup.assert_not_awaited()
+
+    async def test_group_chat_cannot_confirm(self):
+        data = self.button()
+        query = await self.press(data, chat_type="supergroup")
+        self.assertEqual(db.get_software_state("xray")["current_version"], "v1")
+        query.answer.assert_awaited_once_with("Доступ запрещён.", show_alert=True)
+        query.edit_message_reply_markup.assert_not_awaited()
+
+    async def test_missing_identity_cannot_confirm(self):
+        for options in ({"user_id": None}, {"chat_id": None}, {"authorized_id": None}):
+            with self.subTest(options=options):
+                query = await self.press(self.button(), **options)
+                self.assertEqual(db.get_software_state("xray")["current_version"], "v1")
+                query.answer.assert_awaited_once_with("Доступ запрещён.", show_alert=True)
+                query.edit_message_reply_markup.assert_not_awaited()
+
+    def test_authorization_requires_owner_private_chat(self):
+        context = SimpleNamespace(bot_data={"telegram_chat_id": 12345})
+        update = SimpleNamespace(
+            effective_user=SimpleNamespace(id=12345),
+            effective_chat=SimpleNamespace(id=12345, type="private"),
+        )
+        self.assertTrue(is_authorized(update, context))
+        update.effective_chat.type = "group"
+        self.assertFalse(is_authorized(update, context))
 
     async def test_current_and_duplicate(self):
         data = self.button()
@@ -74,10 +119,19 @@ class ButtonTests(unittest.IsolatedAsyncioTestCase):
         await self.press(data)
         self.assertEqual(db.get_software_state("xray")["current_version"], "v2")
 
-    async def test_edit_failure_does_not_undo_confirmation(self):
-        query = await self.press(self.button(), BadRequest("Message is not modified"))
+    async def test_edit_failure_does_bot_undo_confirmation(self):
+        with self.assertLogs("telegram_handlers", level="WARNING") as logs:
+            query = await self.press(
+                self.button(),
+                BadRequest("Message is not modified"),
+            )
+
         self.assertEqual(db.get_software_state("xray")["current_version"], "v2")
         query.answer.assert_awaited_once()
+        self.assertTrue(
+            any("Cannot remove notification button" in message
+                for message in logs.output)
+        )
 
     async def test_notification_long_unicode_version(self):
         bot = SimpleNamespace(send_message=AsyncMock())
