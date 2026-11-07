@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from packaging.version import Version, InvalidVersion
+from version_comparison import VersionComparison, compare_versions
 
 
 
@@ -13,12 +13,16 @@ class UpdateResult:
     update_available: bool
     notify_required: bool
 
-def is_newer_version(current_version: str, latest_version: str) -> bool:
-    try:
-        return Version(latest_version.lstrip("vV")) > Version(current_version.lstrip("vV"))
-    except InvalidVersion:
-        # Preserve existing behavior for projects using nonstandard tags.
-        return current_version != latest_version
+
+def is_newer_version(
+    current_version: str,
+    latest_version: str,
+) -> bool:
+    return (
+        compare_versions(current_version, latest_version)
+        is VersionComparison.NEWER
+    )
+
 
 
 def should_notify(

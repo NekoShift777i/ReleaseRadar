@@ -16,6 +16,7 @@ from providers.base import CheckCancelled
 from error_messages import describe_check_error
 from threading import Event
 from check_locks import SoftwareCheckLocks
+from version_comparison import VersionComparison, compare_versions
 from database import (
     initialize_database, 
     get_or_create_software_state,
@@ -115,6 +116,20 @@ def check_updates(
                 if state is None:
                     continue
                 update_available = is_newer_version(state["current_version"], release.version)
+                comparison = compare_versions(
+                    state["current_version"],
+                    release.version,
+                )
+
+                if comparison is VersionComparison.UNKNOWN:
+                    logger.warning(
+                        "%s: невозможно определить порядок версий "
+                        "(установлена: %r, обнаружена: %r). "
+                        "Требуется ручная проверка.",
+                        software["name"],
+                        state["current_version"],
+                        release.version,
+                    )
                 if update_available:
                     logger.info("%s update available: %s -> %s", software["name"], state["current_version"], release.version)
                 else:

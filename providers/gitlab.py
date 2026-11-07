@@ -7,6 +7,7 @@ from urllib.parse import quote, urlsplit, parse_qs
 import httpx
 
 from providers.base import Release, raise_if_stopping
+from providers.release_selection import select_latest_release
 from threading import Event
 
 logger = logging.getLogger(__name__)
@@ -54,6 +55,7 @@ def get_latest_release(
             raise ValueError("GitLab Releases API returned an invalid response")
         if not releases:
             break
+        candidates = []
         for data in releases:
             raise_if_stopping(stop_event)
             if not isinstance(data, dict):
@@ -78,8 +80,30 @@ def get_latest_release(
             release_url = links.get("self") if isinstance(links, dict) else None
             if not isinstance(release_url, str) or not release_url:
                 release_url = f"{base_url}/{quote(repository, safe='/')}/-/releases/{quote(version, safe='')}"
-            logger.info("Latest release for %s: %s (prerelease=%s)", repository, version, prerelease)
-            return Release(version=version, url=release_url, prerelease=prerelease)
+            candidates.append(
+            Release(
+                version=version,
+                url=release_url,
+                prerelease=prerelease,
+            )
+        )
+
+        
+        if candidates:
+            selected = select_latest_release(
+                candidates,
+                include_prerelease=True,
+                selection_mode="published",
+            )
+
+            logger.info(
+                "Latest release for %s: %s (prerelease=%s)",
+                repository,
+                selected.version,
+                selected.prerelease,
+            )
+            return selected
+
 
         next_url = response.links.get("next", {}).get("url")
         if next_url:

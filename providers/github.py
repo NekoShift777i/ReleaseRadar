@@ -1,4 +1,5 @@
 from providers.base import Release, CheckCancelled, raise_if_stopping
+from providers.release_selection import select_latest_release
 from threading import Event
 
 import httpx
@@ -97,20 +98,19 @@ def get_latest_release(
 
         if not candidates:
             raise RuntimeError(f"Не найдены подходящие выпуски GitHub: {repository}")
+        releases = [
+            Release(
+                version=item["tag_name"],
+                url=item["html_url"],
+                prerelease=bool(item.get("prerelease")),
+            )
+            for item in candidates
+        ]
 
-        comparable = [(version, item) for item in candidates
-                      if (version := _version(item.get("tag_name", ""))) is not None]
-        if comparable:
-            _, chosen = max(comparable, key=lambda pair: pair[0])
-        else:
-            # Non-version tags: retain GitHub's newest-published order.
-            chosen = candidates[0]
-            logger.warning("No comparable version tags for %s; using newest published release", repository)
-
-        release = Release(
-            version=chosen["tag_name"],
-            url=chosen["html_url"],
-            prerelease=bool(chosen.get("prerelease")),
+        release = select_latest_release(
+            releases,
+            include_prerelease=True,
+            selection_mode="version",
         )
         logger.info("Latest release for %s: %s (prerelease=%s)", repository, release.version, release.prerelease)
         return release
