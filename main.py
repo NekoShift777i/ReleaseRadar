@@ -39,118 +39,101 @@ def check_updates(
     skipped_busy: set[str] | None = None,
     software_id: str | None = None,
 ) -> list[UpdateResult]:
+    # Network operations run in worker threads; SQLite is accessed only here.
+    from contextlib import ExitStack
+    from parallel_checks import run_parallel_checks
+
     results: list[UpdateResult] = []
     if check_locks is None:
         check_locks = SoftwareCheckLocks()
 
-    for software in config["software"]:
-        if software_id is not None and software["id"] != software_id:
-            continue
-        if stop_event is not None and stop_event.is_set():
-            break
-        if not software["enabled"]:
-            logger.info(
-                "%s is disabled",
-                software["name"],
-            )
-            continue
-
-        with check_locks.reserve(software["id"]) as acquired:
+    with ExitStack() as reservations:
+        selected = []
+        for software in config["software"]:
+            if software_id is not None and software["id"] != software_id:
+                continue
+            if stop_event is not None and stop_event.is_set():
+                break
+            if not software["enabled"]:
+                logger.info("%s is disabled", software["name"])
+                continue
+            acquired = reservations.enter_context(check_locks.reserve(software["id"]))
             if not acquired:
                 logger.info("Skipping %s: check already running", software["name"])
                 if skipped_busy is not None:
                     skipped_busy.add(software["id"])
                 continue
-            try:
-                state = get_or_create_software_state(
-                        software["id"],
-                        software["current_version"],
-                    )
+            selected.append(software)
 
-                logger.info(
-                    "%s Current version: %s",
-                    software["name"],
-                    state["current_version"]
-                )
-
-                release = get_latest_release(software, stop_event=stop_event)
-                if stop_event is not None and stop_event.is_set():
-                    break
-
-                logger.info(
-                    "%s latest version: %s",
-                    software["name"],
-                    release.version,
-                )
-
-                # A button may have been pressed while the GitHub request was running.
-                state = get_software_state(software["id"])
-                if state is None:
-                    continue
-
-                update_available = (
-                    is_newer_version(state["current_version"], release.version)
-                )
-
-                if update_available:
-                    logger.info(
-                        "%s update available: %s -> %s",
-                        software["name"],
-                        state["current_version"],
-                        release.version,
-                    )
-                else:
-                    logger.info(
-                        "%s is up to date",
-                        software["name"],
-                    )
-
-                update_software_check(
-                    software["id"],
-                    release.version,
-                    datetime.now(timezone.utc).isoformat(),
-                )
-
-                notify_required = should_notify(
-                    state["current_version"],
-                    release.version,
-                    state["last_notified_version"],
-                )
-
-                if notify_required:
-                    logger.info(
-                        "Notification required for %s: %s",
-                        software["name"],
-                        release.version,
-                    )
-
-                result = UpdateResult(
-                    software_id=software["id"],
-                    software_name=software["name"],
-                    current_version=state["current_version"],
-                    latest_version=release.version,
-                    release_url=release.url,
-                    update_available=update_available,
-                    notify_required=notify_required,
-                )
-
-                results.append(result)
-
-            except CheckCancelled:
-                logger.info("Release check stopped")
+        # The initial state is created sequentially, before any network work.
+        ready = []
+        for software in selected:
+            if stop_event is not None and stop_event.is_set():
                 break
+            try:
+                state = get_or_create_software_state(software["id"], software["current_version"])
+                logger.info("%s Current version: %s", software["name"], state["current_version"])
+                ready.append(software)
             except Exception as error:
-                if stop_event is not None and stop_event.is_set():
-                    break
-                logger.exception("Failed to check %s", software["name"])
+                logger.exception("Failed to prepare %s", software["name"])
                 try:
-                    record_software_error(
-                        software["id"], describe_check_error(error),
-                        datetime.now(timezone.utc).isoformat(),
-                    )
+                    record_software_error(software["id"], describe_check_error(error), datetime.now(timezone.utc).isoformat())
                 except Exception:
                     logger.exception("Failed to save check error for %s", software["name"])
 
+        def fetch_release(software):
+            return software, get_latest_release(software, stop_event=stop_event)
+
+        def fetch_error(software, error):
+            if isinstance(error, CheckCancelled) or (stop_event is not None and stop_event.is_set()):
+                logger.info("Release check stopped for %s", software["name"])
+                return
+            logger.warning(
+                "Не удалось проверить %s (%s): %s",
+                software["name"],
+                type(error).__name__,
+                error,
+            )
+            try:
+                record_software_error(software["id"], describe_check_error(error), datetime.now(timezone.utc).isoformat())
+            except Exception:
+                logger.exception("Failed to save check error for %s", software["name"])
+
+        # Error callbacks run on the calling thread, never on a network worker.
+        fetched = run_parallel_checks(
+            ready, fetch_release, config.get("max_parallel_checks", 4),
+            stop_event=stop_event, on_error=fetch_error,
+        )
+        for software, release in fetched:
+            if stop_event is not None and stop_event.is_set():
+                break
+            try:
+                logger.info("%s latest version: %s", software["name"], release.version)
+                # A version may have been confirmed during the network request.
+                state = get_software_state(software["id"])
+                if state is None:
+                    continue
+                update_available = is_newer_version(state["current_version"], release.version)
+                if update_available:
+                    logger.info("%s update available: %s -> %s", software["name"], state["current_version"], release.version)
+                else:
+                    logger.info("%s is up to date", software["name"])
+                update_software_check(software["id"], release.version, datetime.now(timezone.utc).isoformat())
+                notify_required = should_notify(state["current_version"], release.version, state["last_notified_version"])
+                if notify_required:
+                    logger.info("Notification required for %s: %s", software["name"], release.version)
+                results.append(UpdateResult(
+                    software_id=software["id"], software_name=software["name"],
+                    current_version=state["current_version"], latest_version=release.version,
+                    release_url=release.url, update_available=update_available,
+                    notify_required=notify_required,
+                ))
+            except Exception as error:
+                logger.exception("Failed to process %s", software["name"])
+                try:
+                    record_software_error(software["id"], describe_check_error(error), datetime.now(timezone.utc).isoformat())
+                except Exception:
+                    logger.exception("Failed to save check error for %s", software["name"])
 
     return results
 

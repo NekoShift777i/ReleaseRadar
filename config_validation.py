@@ -19,10 +19,14 @@ def validate_config(config: Any) -> dict[str, Any]:
             if key not in allowed:
                 errors.append(f"{path}: неизвестное поле {key!r}")
 
-    unknown_fields(config, {"software", "check_interval_seconds", "timezone"}, "config.yaml")
+    unknown_fields(config, {"software", "check_interval_seconds", "timezone", "max_parallel_checks"}, "config.yaml")
     interval = config.get("check_interval_seconds", 3600)
     if type(interval) is not int or interval <= 0:
         errors.append("check_interval_seconds: ожидается целое число секунд больше нуля")
+
+    max_parallel_checks = config.get("max_parallel_checks", 4)
+    if type(max_parallel_checks) is not int or not 1 <= max_parallel_checks <= 16:
+        errors.append("max_parallel_checks: ожидается целое число от 1 до 16")
 
     timezone_name = config.get("timezone", "UTC")
     if not isinstance(timezone_name, str) or not timezone_name or timezone_name != timezone_name.strip():

@@ -28,6 +28,7 @@ git clone git@github.com:[ваш_путь]
 
 ```YAML
 check_interval_seconds: 3600
+max_parallel_checks: 4  # От 1 до 16 одновременных проверок
 software:
   - id: xray
     name: Xray-core
