@@ -2,6 +2,7 @@ import sqlite3
 import secrets
 from contextlib import contextmanager
 from collections.abc import Iterator
+from datetime import datetime, timezone
 
 from pathlib import Path
 
@@ -28,8 +29,18 @@ def create_notification_button(software_id: str, version: str) -> str:
     token = secrets.token_hex(16)
     with get_connection() as connection:
         connection.execute(
-            "INSERT INTO notification_buttons (token, software_id, version) VALUES (?, ?, ?)",
-            (token, software_id, version),
+            """
+            INSERT INTO notification_buttons (
+                token, software_id, version, created_at
+            )
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                token,
+                software_id,
+                version,
+                datetime.now(timezone.utc).isoformat(),
+            ),
         )
     return token
 
@@ -48,8 +59,14 @@ def initialize_database() -> None:
             "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'notification_buttons'"
         ).fetchone() is None
         connection.execute(
-            "CREATE TABLE IF NOT EXISTS notification_buttons ("
-            "token TEXT PRIMARY KEY, software_id TEXT NOT NULL, version TEXT NOT NULL)"
+            """
+            CREATE TABLE IF NOT EXISTS notification_buttons (
+            token TEXT PRIMARY KEY,
+            software_id TEXT NOT NULL,
+            version TEXT NOT NULL,
+            created_at TEXT NOT NULL
+            )
+            """
         )
         connection.execute(
             """
@@ -64,6 +81,27 @@ def initialize_database() -> None:
             )
             """
         )
+
+        button_columns = {
+            row["name"]
+            for row in connection.execute(
+                "PRAGMA table_info(notification_buttons)"
+            )
+        }
+
+        if "created_at" not in button_columns:
+            connection.execute(
+                "ALTER TABLE notification_buttons ADD COLUMN created_at TEXT"
+            )
+            connection.execute(
+                """
+                UPDATE notification_buttons
+                SET created_at = ?
+                WHERE created_at IS NULL
+                """,
+                (datetime.now(timezone.utc).isoformat(),),
+            )
+
         columns = {row["name"] for row in connection.execute("PRAGMA table_info(software_state)")}
         for column in ("last_error", "last_error_at"):
             if column not in columns:
