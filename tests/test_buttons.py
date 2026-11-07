@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 
 import database as db
 from telegram.error import BadRequest
-from telegram_handlers import handle_version_updated, is_authorized
+from telegram_handlers import handle_version_updated, is_authorized, handle_version_skip, handle_version_skip_cancel
 from telegram_notifier import send_update_notification
 from update_logic import UpdateResult
 
@@ -38,6 +38,7 @@ class ButtonTests(unittest.IsolatedAsyncioTestCase):
             effective_chat=SimpleNamespace(id=chat_id, type=chat_type) if chat_id is not None else None,
         )
         context = SimpleNamespace(
+                user_data={},
                 bot_data={
                 "telegram_chat_id": authorized_id,
                 "config": {
@@ -218,6 +219,365 @@ class ButtonTests(unittest.IsolatedAsyncioTestCase):
             show_alert=True,
         )
         query.edit_message_reply_markup.assert_not_awaited()
+
+    
+    async def test_duplicate_skip_button_does_not_repeat_prompt(self):
+        token = db.create_notification_button("xray", "v2")
+        data = f"version_skip:v1:{token}"
+
+        query = SimpleNamespace(
+            data=data,
+            answer=AsyncMock(),
+            message=SimpleNamespace(
+                chat_id=12345,
+                message_id=100,
+                reply_text=AsyncMock(),
+            ),
+        )
+
+        update = SimpleNamespace(callback_query=query)
+        context = SimpleNamespace(
+            user_data={},
+            bot_data={
+                "config": {
+                    "notification_button_retention": "30d",
+                }
+            },
+        )
+
+        with patch(
+            "telegram_handlers.is_authorized",
+            return_value=True,
+        ):
+            await handle_version_skip(update, context)
+
+            self.assertEqual(
+                query.message.reply_text.await_count,
+                1,
+            )
+
+            first_pending = context.user_data[
+                "pending_version_skip"
+            ].copy()
+
+            await handle_version_skip(update, context)
+
+        self.assertEqual(
+            query.message.reply_text.await_count,
+            1,
+        )
+
+        self.assertEqual(
+            context.user_data["pending_version_skip"],
+            first_pending,
+        )
+
+        self.assertFalse(
+            db.is_release_skipped("xray", "v2")
+        )
+
+        
+    async def test_second_skip_request_does_not_replace_first(self):
+        db.create_software_state("other", "v1")
+        db.update_software_check("other", "v2", "now")
+
+        first_token = db.create_notification_button("xray", "v2")
+        second_token = db.create_notification_button("other", "v2")
+
+        def make_query(token, message_id):
+            return SimpleNamespace(
+                data=f"version_skip:v1:{token}",
+                answer=AsyncMock(),
+                message=SimpleNamespace(
+                    chat_id=12345,
+                    message_id=message_id,
+                    reply_text=AsyncMock(),
+                ),
+            )
+
+        context = SimpleNamespace(
+            user_data={},
+            bot_data={
+                "config": {
+                    "notification_button_retention": "30d",
+                },
+            },
+        )
+
+        first_query = make_query(first_token, 100)
+        second_query = make_query(second_token, 101)
+
+        with patch(
+            "telegram_handlers.is_authorized",
+            return_value=True,
+        ):
+            await handle_version_skip(
+                SimpleNamespace(callback_query=first_query),
+                context,
+            )
+
+            first_pending = context.user_data[
+                "pending_version_skip"
+            ].copy()
+
+            await handle_version_skip(
+                SimpleNamespace(callback_query=second_query),
+                context,
+            )
+
+        self.assertEqual(
+            context.user_data["pending_version_skip"],
+            first_pending,
+        )
+
+        self.assertEqual(
+            first_query.message.reply_text.await_count,
+            1,
+        )
+
+        second_query.message.reply_text.assert_not_awaited()
+
+        second_query.answer.assert_awaited_once_with(
+            "Сначала завершите или отмените предыдущий пропуск.",
+            show_alert=True,
+        )
+
+        self.assertFalse(db.is_release_skipped("xray", "v2"))
+        self.assertFalse(db.is_release_skipped("other", "v2"))
+
+
+    async def test_skip_cancel_allows_new_request(self):
+        first_token = db.create_notification_button("xray", "v2")
+
+        context = SimpleNamespace(
+            user_data={},
+            bot_data={
+                "config": {
+                    "notification_button_retention": "30d",
+                },
+            },
+        )
+
+        def make_query(data, message_id):
+            return SimpleNamespace(
+                data=data,
+                answer=AsyncMock(),
+                message=SimpleNamespace(
+                    chat_id=12345,
+                    message_id=message_id,
+                    reply_text=AsyncMock(),
+                ),
+            )
+
+        first_query = make_query(
+            f"version_skip:v1:{first_token}",
+            100,
+        )
+
+        with (
+            patch(
+                "telegram_handlers.is_authorized",
+                return_value=True,
+            ),
+            patch(
+                "telegram_handlers.edit_callback_message",
+                new_callable=AsyncMock,
+            ),
+        ):
+            await handle_version_skip(
+                SimpleNamespace(callback_query=first_query),
+                context,
+            )
+
+            request_token = context.user_data[
+                "pending_version_skip"
+            ]["request_token"]
+
+            cancel_query = make_query(
+                f"version_skip_cancel:v1:{request_token}",
+                101,
+            )
+
+            self.assertIn(
+                "pending_version_skip",
+                context.user_data,
+            )
+
+            await handle_version_skip_cancel(
+                SimpleNamespace(callback_query=cancel_query),
+                context,
+            )
+
+            self.assertNotIn(
+                "pending_version_skip",
+                context.user_data,
+            )
+
+            cancel_query.answer.assert_awaited_once_with(
+                "Пропуск отменён."
+            )
+
+            second_query = make_query(
+                f"version_skip:v1:{first_token}",
+                102,
+            )
+
+            await handle_version_skip(
+                SimpleNamespace(callback_query=second_query),
+                context,
+            )
+
+        self.assertIn(
+            "pending_version_skip",
+            context.user_data,
+        )
+
+        self.assertEqual(
+            context.user_data["pending_version_skip"]["message_id"],
+            102,
+        )
+
+        second_query.message.reply_text.assert_awaited_once()
+
+        self.assertFalse(
+            db.is_release_skipped("xray", "v2")
+        )
+
+    
+    async def test_old_cancel_does_not_cancel_new_skip_request(self):
+        token = db.create_notification_button("xray", "v2")
+
+        context = SimpleNamespace(
+            user_data={},
+            bot_data={
+                "config": {
+                    "notification_button_retention": "30d",
+                },
+            },
+        )
+
+        def make_query(data, message_id):
+            return SimpleNamespace(
+                data=data,
+                answer=AsyncMock(),
+                message=SimpleNamespace(
+                    chat_id=12345,
+                    message_id=message_id,
+                    reply_text=AsyncMock(),
+                ),
+            )
+
+        skip_data = f"version_skip:v1:{token}"
+
+        with (
+            patch(
+                "telegram_handlers.is_authorized",
+                return_value=True,
+            ),
+            patch(
+                "telegram_handlers.edit_callback_message",
+                new_callable=AsyncMock,
+            ),
+        ):
+            # Первый запрос.
+            await handle_version_skip(
+                SimpleNamespace(
+                    callback_query=make_query(skip_data, 100)
+                ),
+                context,
+            )
+
+            old_request_token = context.user_data[
+                "pending_version_skip"
+            ]["request_token"]
+
+            cancel_data = f"version_skip_cancel:v1:{old_request_token}"
+
+            # Отменяем первый запрос.
+            await handle_version_skip_cancel(
+                SimpleNamespace(
+                    callback_query=make_query(cancel_data, 101)
+                ),
+                context,
+            )
+
+            # Создаём новый запрос для того же выпуска.
+            await handle_version_skip(
+                SimpleNamespace(
+                    callback_query=make_query(skip_data, 100)
+                ),
+                context,
+            )
+
+            second_pending = context.user_data[
+                "pending_version_skip"
+            ].copy()
+
+            # Нажимаем старую кнопку отмены.
+            old_cancel = make_query(cancel_data, 101)
+
+            await handle_version_skip_cancel(
+                SimpleNamespace(callback_query=old_cancel),
+                context,
+            )
+
+        # Новый запрос должен сохраниться.
+        self.assertEqual(
+            context.user_data.get("pending_version_skip"),
+            second_pending,
+        )
+
+        self.assertFalse(
+            db.is_release_skipped("xray", "v2")
+        )
+    
+    async def test_skip_cancel_button_uses_request_token(self):
+        token = db.create_notification_button("xray", "v2")
+
+        query = SimpleNamespace(
+            data=f"version_skip:v1:{token}",
+            answer=AsyncMock(),
+            message=SimpleNamespace(
+                chat_id=12345,
+                message_id=100,
+                reply_text=AsyncMock(),
+            ),
+        )
+
+        context = SimpleNamespace(
+            user_data={},
+            bot_data={
+                "config": {
+                    "notification_button_retention": "30d",
+                },
+            },
+        )
+
+        with patch(
+            "telegram_handlers.is_authorized",
+            return_value=True,
+        ):
+            await handle_version_skip(
+                SimpleNamespace(callback_query=query),
+                context,
+            )
+
+        pending = context.user_data["pending_version_skip"]
+        request_token = pending["request_token"]
+
+        self.assertNotEqual(request_token, token)
+
+        query.message.reply_text.assert_awaited_once()
+
+        kwargs = query.message.reply_text.await_args.kwargs
+        keyboard = kwargs["reply_markup"]
+
+        button = keyboard.inline_keyboard[0][0]
+
+        self.assertEqual(
+            button.callback_data,
+            f"version_skip_cancel:v1:{request_token}",
+        )
 
 
 if __name__ == "__main__":

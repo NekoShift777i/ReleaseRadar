@@ -8,8 +8,27 @@ from notifications import get_pending_notifications
 from telegram_notifier import send_update_notification
 from telegram import BotCommand
 from telegram.error import NetworkError
-from telegram.ext import Application, CallbackQueryHandler, CommandHandler
-from telegram_handlers import handle_version_updated, handle_status, handle_check, handle_pending, handle_check_selection
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    MessageHandler,
+    filters,
+)
+from telegram_handlers import (
+    handle_version_updated,
+    handle_status,
+    handle_check,
+    handle_pending,
+    handle_check_selection,
+    handle_version_skip,
+    handle_version_skip_reason,
+    handle_version_skip_cancel,
+    handle_confirm,
+    handle_confirm_selection,
+    handle_confirm_apply,
+    handle_skipped,
+)
 from scheduler import get_check_interval, run_periodic_checks, ManualCheckRequests
 from shutdown import ShutdownController, handle_console_interrupt, keep_signal_loop_responsive
 from providers.base import CheckCancelled
@@ -25,6 +44,7 @@ from database import (
     get_software_state,
     record_software_error,
     cleanup_notification_buttons,
+    is_release_skipped,
 )
 
 import asyncio
@@ -135,7 +155,24 @@ def check_updates(
                 else:
                     logger.info("%s is up to date", software["name"])
                 update_software_check(software["id"], release.version, datetime.now(timezone.utc).isoformat())
-                notify_required = should_notify(state["current_version"], release.version, state["last_notified_version"])
+
+                notify_required = should_notify(
+                    state["current_version"],
+                    release.version,
+                    state["last_notified_version"],
+                )
+
+                if notify_required and is_release_skipped(
+                    software["id"],
+                    release.version,
+                ):
+                    logger.info(
+                        "%s: уведомление о выпуске %s пропущено",
+                        software["name"],
+                        release.version,
+                    )
+                    notify_required = False
+
                 if notify_required:
                     logger.info("Notification required for %s: %s", software["name"], release.version)
                 results.append(UpdateResult(
@@ -171,6 +208,11 @@ async def send_pending_notifications(
             if state is None or not should_notify(
                 state["current_version"], result.latest_version,
                 state["last_notified_version"],
+            ):
+                continue
+            if is_release_skipped(
+                result.software_id,
+                result.latest_version,
             ):
                 continue
             result.current_version = state["current_version"]
@@ -235,9 +277,12 @@ def main() -> None:
 
     async def post_init(application: Application) -> None:
         await application.bot.set_my_commands([
+            BotCommand("start", "запустить бота"),
             BotCommand("status", "Состояние отслеживаемых программ"),
             BotCommand("check", "Проверить наличие обновлений"),
             BotCommand("pending", "Повторить неподтверждённые уведомления"),
+            BotCommand("confirm", "Подтвердить установку обновления"),
+            BotCommand("skipped", "Покаазать список пропусков версий")
         ])
         stop_event = asyncio.Event()
         shutdown.bind(stop_event)
@@ -326,12 +371,48 @@ def main() -> None:
     application.add_handler(CommandHandler("status", handle_status))
     application.add_handler(CommandHandler("check", handle_check))
     application.add_handler(CommandHandler("pending", handle_pending))
+    application.add_handler(CommandHandler("confirm", handle_confirm))
+    application.add_handler(CommandHandler("skipped", handle_skipped))
     application.add_handler(CallbackQueryHandler(handle_check_selection, pattern=r"^(?:check_all$|check_cancel$|check_select:|check_page:|check_page_info$)"))
+    application.add_handler(
+        CallbackQueryHandler(
+            handle_confirm_selection,
+            pattern=r"^(?:confirm_select:v1:[0-9a-f]{32}|confirm_cancel(?::v1:[0-9a-f]{32})?)$",
+        )
+    )
+
+    application.add_handler(
+        CallbackQueryHandler(
+            handle_confirm_apply,
+            pattern=r"^confirm_apply:v1:[0-9a-f]{32}$",
+        )
+    )
 
     application.add_handler(
         CallbackQueryHandler(
             handle_version_updated,
             pattern=r"^version_updated:",
+        )
+    )
+
+    application.add_handler(
+        CallbackQueryHandler(
+            handle_version_skip,
+            pattern=r"^version_skip:v1:",
+        )
+    )
+
+    application.add_handler(
+        CallbackQueryHandler(
+            handle_version_skip_cancel,
+            pattern=r"^version_skip_cancel:v1:[0-9a-f]{32}$",
+        )
+    )
+
+    application.add_handler(
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND,
+            handle_version_skip_reason,
         )
     )
 

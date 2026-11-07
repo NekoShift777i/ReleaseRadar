@@ -151,6 +151,18 @@ def initialize_database() -> None:
             """
         )
 
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS skipped_releases (
+                software_id TEXT NOT NULL,
+                version TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                skipped_at TEXT NOT NULL,
+                PRIMARY KEY (software_id, version)
+            )
+            """
+        )
+
         button_columns = {
             row["name"]
             for row in connection.execute(
@@ -321,3 +333,89 @@ def record_software_error(software_id: str, message: str, occurred_at: str) -> N
             "UPDATE software_state SET last_error = ?, last_error_at = ? WHERE software_id = ?",
             (message, occurred_at, software_id),
         )
+
+
+
+def skip_release(
+    software_id: str,
+    version: str,
+    reason: str,
+) -> bool:
+    reason = reason.strip()
+
+    if not reason:
+        raise ValueError("Причина пропуска не может быть пустой")
+
+    with get_connection() as connection:
+        cursor = connection.execute(
+            """
+            INSERT OR IGNORE INTO skipped_releases (
+                software_id,
+                version,
+                reason,
+                skipped_at
+            )
+            SELECT
+                software_id,
+                latest_version,
+                ?,
+                ?
+            FROM software_state
+            WHERE software_id = ?
+              AND latest_version = ?
+              AND current_version != ?
+            """,
+            (
+                reason,
+                datetime.now(timezone.utc).isoformat(),
+                software_id,
+                version,
+                version,
+            ),
+        )
+
+        return cursor.rowcount == 1
+
+
+
+def is_release_skipped(
+    software_id: str,
+    version: str,
+) -> bool:
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT 1
+            FROM skipped_releases
+            WHERE software_id = ? AND version = ?
+            """,
+            (software_id, version),
+        )
+
+        return row.fetchone() is not None
+
+
+def get_skipped_releases(
+    software_id: str | None = None,
+) -> list[dict]:
+    """Return skipped releases, newest first."""
+    query = """
+        SELECT
+            software_id,
+            version,
+            reason,
+            skipped_at
+        FROM skipped_releases
+    """
+    params = []
+
+    if software_id is not None:
+        query += " WHERE software_id = ?"
+        params.append(software_id)
+
+    query += " ORDER BY skipped_at DESC, software_id ASC, version ASC"
+
+    with get_connection() as connection:
+        rows = connection.execute(query, params).fetchall()
+
+    return [dict(row) for row in rows]

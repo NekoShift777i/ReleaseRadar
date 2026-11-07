@@ -34,11 +34,19 @@ class MainParallelTests(unittest.TestCase):
             database_threads.append(threading.get_ident())
             return {"current_version": "v1", "last_notified_version": None}
 
+
         with patch("main.get_latest_release", side_effect=fetch), \
              patch("main.get_or_create_software_state", side_effect=db_state), \
              patch("main.get_software_state", side_effect=db_state), \
-             patch("main.update_software_check", side_effect=lambda *args: database_threads.append(threading.get_ident())):
+             patch("main.is_release_skipped", return_value=False), \
+             patch(
+                 "main.update_software_check",
+                 side_effect=lambda *args: database_threads.append(
+                     threading.get_ident()
+                 ),
+             ):
             results = check_updates(self.config)
+
         self.assertEqual(peak, 2)
         self.assertEqual([r.software_id for r in results], ["0", "1", "2", "3"])
         self.assertTrue(database_threads)

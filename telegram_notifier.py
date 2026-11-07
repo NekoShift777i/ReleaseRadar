@@ -17,6 +17,7 @@ async def send_update_notification(
         result: UpdateResult,
 ) -> None:
     token = create_notification_button(result.software_id, result.latest_version)
+
     keyboard = InlineKeyboardMarkup(
         [
             [
@@ -24,9 +25,16 @@ async def send_update_notification(
                     "✅ Версия обновлена",
                     callback_data=f"version_updated:v1:{token}",
                 )
-            ]
+            ],
+            [
+                InlineKeyboardButton(
+                    "⏭️ Пропустить версию",
+                    callback_data=f"version_skip:v1:{token}",
+                )
+            ],
         ]
     )
+
 
     message = (
         f"🔔 Доступно обновление {result.software_name}\n\n"

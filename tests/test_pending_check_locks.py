@@ -23,8 +23,16 @@ class PendingCheckLocksTests(unittest.TestCase):
     def test_available_program_fetches_and_rechecks_state(self):
         release = SimpleNamespace(version="v2", url="https://example.invalid/v2")
         state = {"current_version": "v1", "latest_version": "v2"}
-        with patch("telegram_handlers.get_latest_release", return_value=release) as fetch, \
-             patch("telegram_handlers.get_software_state", return_value=state) as read:
+        with patch(
+            "telegram_handlers.get_latest_release",
+            return_value=release,
+        ) as fetch, patch(
+            "telegram_handlers.get_software_state",
+            return_value=state,
+        ) as read, patch(
+            "telegram_handlers.is_release_skipped",
+            return_value=False,
+        ):
             result = get_pending_release(self.software, self.locks)
         self.assertEqual(result, (release, state))
         fetch.assert_called_once_with(self.software)

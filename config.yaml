@@ -137,11 +137,4 @@ software:
     channel: stable
     current_version: v0.18.0
     enabled: true
-  - id: test
-    name: Test record
-    provider: github
-    repository: unknown/unknown
-    channel: stable
-    current_version: unknown
-    enabled: false
 
