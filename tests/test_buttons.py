@@ -2,7 +2,7 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 from types import SimpleNamespace
 from datetime import datetime, timedelta, timezone
 
@@ -198,6 +198,27 @@ class ButtonTests(unittest.IsolatedAsyncioTestCase):
         query.edit_message_reply_markup.assert_awaited_once_with(
             reply_markup=None,
         )
+
+    
+    async def test_database_error_does_not_confirm_update(self):
+        data = self.button()
+
+        with patch(
+            "telegram_handlers.mark_version_updated",
+            side_effect=sqlite3.OperationalError("database is locked"),
+        ):
+            query = await self.press(data)
+
+        self.assertEqual(
+            db.get_software_state("xray")["current_version"],
+            "v1",
+        )
+        query.answer.assert_awaited_once_with(
+            "Не удалось обновить базу. Попробуйте ещё раз.",
+            show_alert=True,
+        )
+        query.edit_message_reply_markup.assert_not_awaited()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -41,3 +41,46 @@ class CheckErrorTests(unittest.TestCase):
                 self.assertIsNone(state['last_error'])
                 self.assertIsNone(state['last_error_at'])
                 self.assertEqual(state['latest_version'], 'v3')
+
+    
+    def test_service_unavailable_does_not_expose_url(self):
+        request = httpx.Request(
+            "GET",
+            "https://example.org/private?token=secret",
+        )
+        response = httpx.Response(
+            503,
+            request=request,
+        )
+        error = httpx.HTTPStatusError(
+            "secret",
+            request=request,
+            response=response,
+        )
+
+        message = describe_check_error(error)
+
+        self.assertIn("503", message)
+        self.assertNotIn("secret", message)
+        self.assertNotIn("token=", message)
+        self.assertNotIn("example.org", message)
+
+
+    def test_timeout_does_not_expose_url(self):
+        request = httpx.Request(
+            "GET",
+            "https://example.org/private?token=secret",
+        )
+
+        error = httpx.ReadTimeout(
+            "secret",
+            request=request,
+        )
+
+        message = describe_check_error(error)
+
+        self.assertEqual(
+            message,
+            "Превышено время ожидания ответа источника",
+        )
+
