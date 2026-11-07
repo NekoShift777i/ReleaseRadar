@@ -17,7 +17,16 @@ class CheckSelectionTests(unittest.IsolatedAsyncioTestCase):
         self.requests.request.return_value = "accepted"
 
     def make_context(self, data, user=123):
-        query = SimpleNamespace(data=data, answer=AsyncMock(), edit_message_reply_markup=AsyncMock())
+        query = SimpleNamespace(
+            data=data,
+            answer=AsyncMock(),
+            edit_message_reply_markup=AsyncMock(),
+            edit_message_text=AsyncMock(),
+            message=SimpleNamespace(
+                text="Выберите программу для проверки:",
+                reply_markup=build_check_keyboard(self.config),
+            ),
+        )
         update = SimpleNamespace(callback_query=query, effective_user=SimpleNamespace(id=user),
                                  effective_chat=SimpleNamespace(id=123, type="private"))
         context = SimpleNamespace(bot_data={"telegram_chat_id": 123, "config": self.config,
@@ -34,12 +43,21 @@ class CheckSelectionTests(unittest.IsolatedAsyncioTestCase):
         update, context = self.make_context("check_select:1")
         await handle_check_selection(update, context)
         self.assertEqual(self.requests.request.call_args.kwargs["software_id"], "two")
-        update.callback_query.edit_message_reply_markup.assert_awaited_once()
+        update.callback_query.edit_message_text.assert_awaited_once_with(
+            text="Запрошена проверка Two. Ожидайте результат.",
+            reply_markup=None,
+            parse_mode=None,
+        )
 
     async def test_all_software(self):
         update, context = self.make_context("check_all")
         await handle_check_selection(update, context)
         self.assertIsNone(self.requests.request.call_args.kwargs["software_id"])
+        update.callback_query.edit_message_text.assert_awaited_once_with(
+            text="Запрошена проверка всех программ. Ожидайте результат.",
+            reply_markup=None,
+            parse_mode=None,
+        )
 
     async def test_unauthorized(self):
         update, context = self.make_context("check_select:0", user=999)

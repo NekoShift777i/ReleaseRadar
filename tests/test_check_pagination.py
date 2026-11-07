@@ -17,7 +17,10 @@ class CheckPaginationTests(unittest.IsolatedAsyncioTestCase):
 
     def make_context(self, data, user=123):
         query = SimpleNamespace(data=data, answer=AsyncMock(),
-                                edit_message_reply_markup=AsyncMock())
+                                edit_message_reply_markup=AsyncMock(),
+                                edit_message_text=AsyncMock(),
+                                message=SimpleNamespace(text="Выберите программу для проверки:",
+                                                        reply_markup=None))
         update = SimpleNamespace(callback_query=query,
                                  effective_user=SimpleNamespace(id=user),
                                  effective_chat=SimpleNamespace(id=123, type="private"))
@@ -65,6 +68,23 @@ class CheckPaginationTests(unittest.IsolatedAsyncioTestCase):
         await handle_check_selection(update, context)
         self.assertEqual(self.requests.request.call_args.kwargs["software_id"], "id-18")
 
+    async def test_accepted_selection_updates_text_and_removes_buttons(self):
+        update, context = self.make_context("check_select:17")
+        await handle_check_selection(update, context)
+        update.callback_query.edit_message_text.assert_awaited_once_with(
+            text="Запрошена проверка Program 18. Ожидайте результат.",
+            reply_markup=None, parse_mode=None,
+        )
+        update.callback_query.answer.assert_awaited_once()
+
+    async def test_accepted_all_updates_text(self):
+        update, context = self.make_context("check_all")
+        await handle_check_selection(update, context)
+        update.callback_query.edit_message_text.assert_awaited_once_with(
+            text="Запрошена проверка всех программ. Ожидайте результат.",
+            reply_markup=None, parse_mode=None,
+        )
+
     async def test_stale_page_rejected(self):
         update, context = self.make_context("check_page:99")
         await handle_check_selection(update, context)
@@ -95,10 +115,44 @@ class CheckCancelTests(unittest.IsolatedAsyncioTestCase):
         await handle_check_selection(update, context)
         self.helper.requests.request.assert_not_called()
         update.callback_query.answer.assert_awaited_once()
-        update.callback_query.edit_message_reply_markup.assert_awaited_once_with(reply_markup=None)
+        update.callback_query.edit_message_text.assert_awaited_once_with(
+            text="Выбор проверки отменён.", reply_markup=None, parse_mode=None)
 
     async def test_cancel_unauthorized(self):
         update, context = self.helper.make_context("check_cancel", user=999)
         await handle_check_selection(update, context)
         self.helper.requests.request.assert_not_called()
         update.callback_query.edit_message_reply_markup.assert_not_awaited()
+
+
+class CheckMenuEditTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.helper = CheckPaginationTests()
+        self.helper.setUp()
+
+    async def test_repeated_page_click_does_not_edit(self):
+        update, context = self.helper.make_context("check_page:1")
+        update.callback_query.message.reply_markup = build_check_keyboard(
+            self.helper.config, 1
+        )
+        await handle_check_selection(update, context)
+        update.callback_query.answer.assert_awaited_once()
+        update.callback_query.edit_message_reply_markup.assert_not_awaited()
+
+    async def test_cancel_with_missing_message_does_not_crash(self):
+        from telegram.error import BadRequest
+        update, context = self.helper.make_context("check_cancel")
+        update.callback_query.message = None
+        update.callback_query.edit_message_text.side_effect = BadRequest(
+            "Message to edit not found"
+        )
+        await handle_check_selection(update, context)
+        update.callback_query.answer.assert_awaited_once()
+        self.helper.requests.request.assert_not_called()
+
+    async def test_cancel_unchanged_message_does_not_edit(self):
+        update, context = self.helper.make_context("check_cancel")
+        update.callback_query.message.text = "Выбор проверки отменён."
+        await handle_check_selection(update, context)
+        update.callback_query.answer.assert_awaited_once()
+        update.callback_query.edit_message_text.assert_not_awaited()

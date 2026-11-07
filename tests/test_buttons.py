@@ -29,6 +29,7 @@ class ButtonTests(unittest.IsolatedAsyncioTestCase):
         query = SimpleNamespace(
             data=data, answer=AsyncMock(),
             edit_message_reply_markup=AsyncMock(side_effect=edit_error),
+            message=SimpleNamespace(text="Уведомление", reply_markup=object()),
         )
         update = SimpleNamespace(
             callback_query=query,
@@ -119,19 +120,17 @@ class ButtonTests(unittest.IsolatedAsyncioTestCase):
         await self.press(data)
         self.assertEqual(db.get_software_state("xray")["current_version"], "v2")
 
-    async def test_edit_failure_does_bot_undo_confirmation(self):
-        with self.assertLogs("telegram_handlers", level="WARNING") as logs:
-            query = await self.press(
-                self.button(),
-                BadRequest("Message is not modified"),
-            )
-
+    async def test_not_modified_does_not_undo_confirmation(self):
+        query = await self.press(self.button(), BadRequest("Message is not modified"))
         self.assertEqual(db.get_software_state("xray")["current_version"], "v2")
         query.answer.assert_awaited_once()
-        self.assertTrue(
-            any("Cannot remove notification button" in message
-                for message in logs.output)
-        )
+        query.edit_message_reply_markup.assert_awaited_once_with(reply_markup=None)
+
+    async def test_deleted_notification_does_not_undo_confirmation(self):
+        with self.assertLogs("message_editing", level="WARNING"):
+            query = await self.press(self.button(), BadRequest("Message to edit not found"))
+        self.assertEqual(db.get_software_state("xray")["current_version"], "v2")
+        query.answer.assert_awaited_once()
 
     async def test_notification_long_unicode_version(self):
         bot = SimpleNamespace(send_message=AsyncMock())

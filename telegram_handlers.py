@@ -11,6 +11,7 @@ from telegram_notifier import send_update_notification
 from update_logic import UpdateResult
 from status import get_status_messages
 from check_locks import SoftwareCheckLocks
+from message_editing import edit_callback_message
 
 logger = logging.getLogger(__name__)
 
@@ -89,10 +90,9 @@ async def handle_check_selection(update: Update, context: ContextTypes.DEFAULT_T
     enabled = [item for item in config["software"] if item["enabled"]]
     if data == "check_cancel":
         await query.answer("Выбор проверки отменён.")
-        try:
-            await query.edit_message_reply_markup(reply_markup=None)
-        except TelegramError:
-            logger.warning("Failed to close check selection", exc_info=True)
+        await edit_callback_message(
+            query, text="Выбор проверки отменён.", reply_markup=None, edit_text=True
+        )
         return
     if data == "check_page_info":
         await query.answer()
@@ -104,12 +104,9 @@ async def handle_check_selection(update: Update, context: ContextTypes.DEFAULT_T
             await query.answer("Страница устарела. Откройте /check заново.", show_alert=True)
             return
         await query.answer()
-        try:
-            await query.edit_message_reply_markup(
-                reply_markup=build_check_keyboard(config, int(match.group(1)))
-            )
-        except TelegramError:
-            logger.warning("Failed to change check page", exc_info=True)
+        await edit_callback_message(
+            query, reply_markup=build_check_keyboard(config, int(match.group(1)))
+        )
         return
     if data == "check_all":
         software_id = None
@@ -144,7 +141,12 @@ async def handle_check_selection(update: Update, context: ContextTypes.DEFAULT_T
     try:
         await query.answer(answers[decision], show_alert=decision != "accepted")
         if decision == "accepted":
-            await query.edit_message_reply_markup(reply_markup=None)
+            await edit_callback_message(
+                query,
+                text=f"Запрошена проверка {label}. Ожидайте результат.",
+                reply_markup=None,
+                edit_text=True,
+            )
     except TelegramError:
         logger.warning("Failed to acknowledge selected check", exc_info=True)
     finally:
@@ -210,10 +212,7 @@ async def handle_version_updated(
         return
 
     await query.answer(answer, show_alert=show_alert)
-    try:
-        await query.edit_message_reply_markup(reply_markup=None)
-    except TelegramError:
-        logger.warning("Cannot remove notification button", exc_info=True)
+    await edit_callback_message(query, reply_markup=None)
 
 
 
