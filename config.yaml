@@ -137,4 +137,11 @@ software:
     channel: stable
     current_version: v0.18.0
     enabled: true
+  - id: heliboard
+    name: HeliBoard for Android
+    provider: github
+    repository: HeliBorg/HeliBoard
+    channel: stable
+    current_version: v4.2
+    enabled: true
 
