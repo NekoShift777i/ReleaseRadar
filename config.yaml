@@ -1,6 +1,7 @@
 timezone: "Asia/Kamchatka"
 check_interval_seconds: 3600
 max_parallel_checks: 4 # Допустимый диапазон настройки: 1–16
+notification_button_retention: 30d # Допустимый диапазон: 14–120 дней
 software:
   - id: xray
     name: Xray-core

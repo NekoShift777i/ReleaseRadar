@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock
 from types import SimpleNamespace
+from datetime import datetime, timedelta, timezone
 
 import database as db
 from telegram.error import BadRequest
@@ -36,7 +37,14 @@ class ButtonTests(unittest.IsolatedAsyncioTestCase):
             effective_user=SimpleNamespace(id=user_id) if user_id is not None else None,
             effective_chat=SimpleNamespace(id=chat_id, type=chat_type) if chat_id is not None else None,
         )
-        context = SimpleNamespace(bot_data={"telegram_chat_id": authorized_id})
+        context = SimpleNamespace(
+                bot_data={
+                "telegram_chat_id": authorized_id,
+                "config": {
+                    "notification_button_retention": "30d",
+                },
+            }
+        )
         await handle_version_updated(update, context)
         return query
 
@@ -158,6 +166,38 @@ class ButtonTests(unittest.IsolatedAsyncioTestCase):
         db.initialize_database()
         self.assertEqual(db.get_software_state("xray")["last_notified_version"], "v2")
 
+    
+    async def test_expired_button_cannot_confirm(self):
+        data = self.button()
+        token = data.removeprefix("version_updated:v1:")
+
+        expired_at = (
+            datetime.now(timezone.utc) - timedelta(days=31)
+        ).isoformat()
+
+        with db.get_connection() as connection:
+            connection.execute(
+                """
+                UPDATE notification_buttons
+                SET created_at = ?
+                WHERE token = ?
+                """,
+                (expired_at, token),
+            )
+
+        query = await self.press(data)
+
+        self.assertEqual(
+            db.get_software_state("xray")["current_version"],
+            "v1",
+        )
+        query.answer.assert_awaited_once_with(
+            "Эта кнопка устарела. Используйте новое уведомление.",
+            show_alert=True,
+        )
+        query.edit_message_reply_markup.assert_awaited_once_with(
+            reply_markup=None,
+        )
 
 if __name__ == "__main__":
     unittest.main()

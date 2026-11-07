@@ -2,7 +2,7 @@ import sqlite3
 import secrets
 from contextlib import contextmanager
 from collections.abc import Iterator
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from pathlib import Path
 
@@ -22,7 +22,6 @@ def get_connection() -> Iterator[sqlite3.Connection]:
             yield connection
     finally:
         connection.close()
-
 
 
 def create_notification_button(software_id: str, version: str) -> str:
@@ -45,12 +44,82 @@ def create_notification_button(software_id: str, version: str) -> str:
     return token
 
 
+def cleanup_notification_buttons(
+    retention: timedelta,
+    now: datetime | None = None,
+) -> int:
+    """Удаляет просроченные кнопки и возвращает их количество."""
+    if retention <= timedelta(0):
+        raise ValueError("Срок хранения должен быть положительным")
+
+    if now is None:
+        now = datetime.now(timezone.utc)
+
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError("Время должно содержать часовой пояс")
+
+    cutoff = (now.astimezone(timezone.utc) - retention).isoformat()
+
+    with get_connection() as connection:
+        cursor = connection.execute(
+            """
+            DELETE FROM notification_buttons
+            WHERE created_at < ?
+            """,
+            (cutoff,),
+        )
+
+        return cursor.rowcount
+
+
+
 def get_notification_button(token: str) -> sqlite3.Row | None:
     with get_connection() as connection:
         return connection.execute(
             "SELECT software_id, version FROM notification_buttons WHERE token = ?",
             (token,),
         ).fetchone()
+
+
+
+def get_valid_notification_button(
+    token: str,
+    retention: timedelta,
+    now: datetime | None = None,
+) -> sqlite3.Row | None:
+    """Возвращает кнопку, только если срок её действия не истёк."""
+    if retention <= timedelta(0):
+        raise ValueError("Срок хранения должен быть положительным")
+
+    if now is None:
+        now = datetime.now(timezone.utc)
+
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError("Время должно содержать часовой пояс")
+
+    with get_connection() as connection:
+        button = connection.execute(
+            """
+            SELECT software_id, version, created_at
+            FROM notification_buttons
+            WHERE token = ?
+            """,
+            (token,),
+        ).fetchone()
+
+    if button is None:
+        return None
+
+    created_at = datetime.fromisoformat(button["created_at"])
+
+    if created_at.tzinfo is None or created_at.utcoffset() is None:
+        raise ValueError("Время создания кнопки не содержит часовой пояс")
+
+    if now.astimezone(timezone.utc) - created_at.astimezone(timezone.utc) >= retention:
+        return None
+
+    return button
+
 
 
 def initialize_database() -> None:

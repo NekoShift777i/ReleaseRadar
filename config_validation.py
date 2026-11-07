@@ -2,10 +2,47 @@ import re
 from typing import Any
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from datetime import timedelta
 
 
 class ConfigError(ValueError):
     """Configuration errors suitable for displaying without a traceback."""
+
+
+
+def parse_notification_button_retention(value: str) -> timedelta:
+    """Преобразует срок хранения кнопок в timedelta."""
+    if not isinstance(value, str):
+        raise ConfigError(
+            "notification_button_retention: ожидается строка, например 30d"
+        )
+
+    match = re.fullmatch(r"([1-9][0-9]*)([hdw])", value)
+    if match is None:
+        raise ConfigError(
+            "notification_button_retention: ожидается число "
+            "с единицей h, d или w, например 30d"
+        )
+
+    amount = int(match.group(1))
+    unit = match.group(2)
+
+    hours_per_unit = {
+        "h": 1,
+        "d": 24,
+        "w": 168,
+    }
+
+    hours = amount * hours_per_unit[unit]
+
+    if not 336 <= hours <= 2880:
+        raise ConfigError(
+            "notification_button_retention: допустимый срок "
+            "от 14 до 120 дней"
+        )
+
+    return timedelta(hours=hours)
+
 
 
 def validate_config(config: Any) -> dict[str, Any]:
@@ -19,7 +56,7 @@ def validate_config(config: Any) -> dict[str, Any]:
             if key not in allowed:
                 errors.append(f"{path}: неизвестное поле {key!r}")
 
-    unknown_fields(config, {"software", "check_interval_seconds", "timezone", "max_parallel_checks"}, "config.yaml")
+    unknown_fields(config, {"software", "check_interval_seconds", "timezone", "max_parallel_checks", "notification_button_retention"}, "config.yaml")
     interval = config.get("check_interval_seconds", 3600)
     if type(interval) is not int or interval <= 0:
         errors.append("check_interval_seconds: ожидается целое число секунд больше нуля")
@@ -27,6 +64,13 @@ def validate_config(config: Any) -> dict[str, Any]:
     max_parallel_checks = config.get("max_parallel_checks", 4)
     if type(max_parallel_checks) is not int or not 1 <= max_parallel_checks <= 16:
         errors.append("max_parallel_checks: ожидается целое число от 1 до 16")
+
+    try:
+        parse_notification_button_retention(
+            config.get("notification_button_retention", "30d")
+        )
+    except ConfigError as error:
+        errors.append(str(error))
 
     timezone_name = config.get("timezone", "UTC")
     if not isinstance(timezone_name, str) or not timezone_name or timezone_name != timezone_name.strip():

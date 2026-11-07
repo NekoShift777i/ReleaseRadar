@@ -1,7 +1,7 @@
 from providers import get_latest_release
 from logger import setup_logging
 from config import load_config, load_telegram_config
-from config_validation import ConfigError
+from config_validation import ConfigError, parse_notification_button_retention
 from datetime import datetime, timezone
 from update_logic import should_notify, is_newer_version, UpdateResult
 from notifications import get_pending_notifications
@@ -23,6 +23,7 @@ from database import (
     mark_version_notified,
     get_software_state,
     record_software_error,
+    cleanup_notification_buttons,
 )
 
 import asyncio
@@ -208,6 +209,10 @@ def main() -> None:
     config = load_config()
     interval = get_check_interval(config)
 
+    button_retention = parse_notification_button_retention(
+        config.get("notification_button_retention", "30d")
+    )
+
     telegram_token, telegram_chat_id = load_telegram_config()
     initialize_database()
     shutdown = ShutdownController()
@@ -226,6 +231,22 @@ def main() -> None:
 
         async def check_once(software_id: str | None = None) -> str | None:
             logger.info("Update check cycle started")
+
+            try:
+                deleted = await asyncio.to_thread(
+                    cleanup_notification_buttons,
+                    button_retention,
+                )
+                if deleted:
+                    logger.info(
+                        "Удалено устаревших кнопок уведомлений: %s",
+                        deleted,
+                    )
+            except Exception:
+                logger.exception(
+                    "Ошибка очистки устаревших кнопок уведомлений"
+                )
+
             skipped_busy: set[str] = set()
             results = await asyncio.to_thread(
                 check_updates, config, shutdown.worker_stop, check_locks, skipped_busy, software_id

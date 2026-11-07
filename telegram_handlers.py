@@ -5,13 +5,18 @@ import re
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
-from database import get_notification_button, mark_version_updated, get_software_state
+from database import (
+    get_valid_notification_button,
+    mark_version_updated,
+    get_software_state,
+)
 from providers import get_latest_release
 from telegram_notifier import send_update_notification
 from update_logic import UpdateResult
 from status import get_status_messages
 from check_locks import SoftwareCheckLocks
 from message_editing import edit_callback_message
+from config_validation import parse_notification_button_retention
 
 logger = logging.getLogger(__name__)
 
@@ -192,7 +197,17 @@ async def handle_version_updated(
 
     match = re.fullmatch(r"version_updated:v1:([0-9a-f]{32})", query.data)
     try:
-        button = get_notification_button(match.group(1)) if match else None
+        retention = parse_notification_button_retention(
+            context.bot_data["config"].get(
+                "notification_button_retention", "30d"
+            )
+        )
+
+        button = (
+            get_valid_notification_button(match.group(1), retention)
+            if match
+            else None
+        )
         if button is None:
             # Legacy buttons have no version and cannot be confirmed safely.
             answer = "Эта кнопка устарела. Используйте новое уведомление."
