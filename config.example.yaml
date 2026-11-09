@@ -1,0 +1,24 @@
+# Specify the time zone using an IANA time zone identifier 
+# For example, "Asia/Kamchatka" or "Europe/Moscow"
+timezone: "Europe/Moscow"
+
+# Set the update check interval in seconds
+# An interval of at least 3600 seconds is recommended
+check_interval_seconds: 3600
+
+# Set the maximum number of checks that can run concurrently
+# Allowed range: 1–16
+max_parallel_checks: 4
+
+# Set how long notification buttons remain valid
+# Allowed duration: 14–120 days
+# Supported units: "h" (hours), "d" (days), "w" (weeks)
+notification_button_retention: 30d
+software:
+  - id: xray # Unique database identifier (changing it after database initialization is NOT recommended)
+    name: Xray-core # Display name (any name; enclosing it in quotes is recommended)
+    provider: github # Repository provider (supported: "github", "gitlab")
+    repository: XTLS/Xray-core # Repository path in owner/name format (see the repository page URL)
+    channel: prerelease # Release channel (supported: "stable", "prerelease")
+    current_version: "1.0.0" # Currently installed version (only needed when creating the initial database record)
+    enabled: true # Required: whether to track this software (true or false)
