@@ -1,210 +1,179 @@
-
 # ReleaseRadar
 
-ReleaseRadar — система автоматического отслеживания новых выпусков
-программного обеспечения с уведомлениями через Telegram.
+[English](README.md) | [Русский](README-RU.md)
 
-Система периодически проверяет заданные репозитории,
-сравнивает обнаруженные версии с сохранённым состоянием
-и сообщает пользователю о доступных обновлениях.
+ReleaseRadar is an automated software release monitoring system that sends notifications through Telegram.
 
-## Возможности
+It periodically checks configured repositories, compares detected versions with the saved state, and notifies the user when updates are available.
 
-- Отслеживание выпусков GitHub и GitLab.
-- Поддержка стабильных и предварительных выпусков.
-- Настраиваемая фильтрация выпусков GitHub.
-- Поддержка личных ключей доступа к программным интерфейсам.
-- Параллельная проверка нескольких программ.
-- Настройка периодичности проверок.
-- Ручная проверка отдельных программ или всего списка.
-- Уведомления об обновлениях через Telegram.
-- Подтверждение установки обнаруженных версий.
-- Пропуск отдельных выпусков с указанием причины.
-- Просмотр истории пропущенных выпусков.
-- Защита от повторных нажатий и устаревших кнопок.
-- Хранение состояния программ в SQLite.
-- Настройка часового пояса.
-- Работа в качестве службы Linux через systemd.
+## Features
 
-## Поддерживаемые источники выпусков
+- Monitor releases on GitHub and GitLab.
+- Support stable and prerelease versions.
+- Configure GitHub release filtering.
+- Use personal API access tokens.
+- Check multiple applications concurrently.
+- Configure the automatic check interval.
+- Manually check individual applications or the entire list.
+- Receive update notifications through Telegram.
+- Confirm installation of detected versions.
+- Skip individual releases and provide a reason.
+- View the history of skipped releases.
+- Protect against repeated clicks and expired buttons.
+- Store application state in SQLite.
+- Configure the time zone.
+- Run as a Linux service with systemd.
 
-- **GitHub** — получение выпусков через GitHub API.
-- **GitLab** — получение выпусков через GitLab API,
-  включая возможность использования собственного сервера GitLab.
+## Supported release sources
 
-## Уведомления и управление
+- **GitHub** — retrieve releases through the GitHub API.
+- **GitLab** — retrieve releases through the GitLab API, including self-hosted GitLab instances.
 
-Для уведомлений и управления используется Telegram-бот.
+## Notifications and management
 
-Бот позволяет проверять обновления, просматривать состояние программ,
-подтверждать установку новых версий и пропускать отдельные выпуски.
+ReleaseRadar uses a Telegram bot for notifications and management.
 
-Доступ к управляющим командам ограничен настроенным пользователем
-в личном чате Telegram.
+The bot can check for updates, show application status, confirm that new versions have been installed, and skip specific releases.
 
+Management commands are restricted to the configured user in a private Telegram chat.
 
-# Установка
+# Installation
 
-ReleaseRadar предназначен для работы на сервере Linux.
-Для установки необходим Python 3.12 или совместимая версия,
-Git и доступ к интернету.
+ReleaseRadar is designed to run on a Linux server. Installation requires Python 3.12 or a compatible version, Git, and internet access.
 
-## Подготовка окружения
+## Prepare the environment
 
-Установите необходимые системные пакеты.
+Install the required system packages.
 
-Для Ubuntu и Debian:
+On Ubuntu and Debian:
 
 ```bash
 sudo apt update
 sudo apt install python3 python3-venv python3-pip git
 ```
 
-Проверьте доступность Python:
+Verify that Python is available:
 
 ```bash
 python3 --version
 ```
 
-## Получение исходного кода
+## Get the source code
 
-Склонируйте репозиторий ReleaseRadar:
+Clone the ReleaseRadar repository:
 
 ```bash
 git clone https://github.com/NekoShift777i/ReleaseRadar.git releaseradar
 cd releaseradar
 ```
 
-## Виртуальное окружение Python
+## Python virtual environment
 
-Создайте виртуальное окружение:
+Create a virtual environment:
 
 ```bash
 python3 -m venv .venv
 ```
 
-Активируйте его:
+Activate it:
 
 ```bash
 source .venv/bin/activate
 ```
 
-Обновите установщик пакетов:
+Upgrade the package installer:
 
 ```bash
 python -m pip install --upgrade pip
 ```
 
-Установите зависимости проекта:
+Install the project dependencies:
 
 ```bash
 python -m pip install -r requirements.txt
 ```
 
-Основные зависимости устанавливаются автоматически,
-включая библиотеки для Telegram, HTTP-запросов,
-чтения YAML и загрузки переменных окружения.
+The main dependencies are installed automatically, including libraries for Telegram, HTTP requests, YAML parsing, and environment-variable loading.
 
-## Первоначальная настройка
+## Initial configuration
 
-Перед запуском необходимо подготовить два файла:
+Prepare two files before starting:
 
-- `config.yaml` — настройки проверок и список программ.
-- `.env` — конфиденциальные параметры Telegram и ключи доступа.
+- `config.yaml` — check settings and the list of monitored applications.
+- `.env` — sensitive Telegram settings and access tokens.
 
-### Файл .env
+### The .env file
 
-Создайте файл `.env` в корне проекта.
+Create `.env` in the project root.
 
-Минимальный пример:
+Minimal example:
 
 ```dotenv
 TELEGRAM_BOT_TOKEN=YOUR_BOT_TOKEN
 TELEGRAM_CHAT_ID=123456789
 ```
 
-Замените значения на действительные.
+Replace these placeholders with actual values.
 
-`TELEGRAM_BOT_TOKEN` — ключ Telegram-бота.
+`TELEGRAM_BOT_TOKEN` is the Telegram bot token.
 
-`TELEGRAM_CHAT_ID` — числовой идентификатор пользователя,
-которому разрешено управлять ботом.
+`TELEGRAM_CHAT_ID` is the numeric identifier of the user authorized to manage the bot.
 
-При необходимости в `.env` также указываются ключи доступа
-к GitHub и GitLab. Названия этих переменных задаются
-в конфигурации программ.
+If needed, `.env` also contains GitHub and GitLab access tokens. Their environment-variable names are specified in the application configuration.
 
-Не публикуйте файл `.env` и не сохраняйте настоящие
-ключи доступа в репозитории.
+Do not publish `.env` or commit real access tokens to the repository.
 
-### Файл config.yaml
+### The config.yaml file
 
-Создайте `config.yaml` в корне проекта.
+Create `config.yaml` in the project root.
 
-Он содержит общие параметры проверки обновлений,
-список отслеживаемых программ, настройки источников
-и фильтрацию выпусков.
+It contains general update-check settings, monitored applications, release-source settings, and release filters.
 
-Подробное описание параметров приведено в следующем разделе.
+The next section describes these options in detail.
 
-## Первый запуск
+## First run
 
-После настройки файлов запустите ReleaseRadar:
+After configuring the files, start ReleaseRadar:
 
 ```bash
 python main.py
 ```
 
-При корректной конфигурации программа начнёт работу
-и запустит Telegram-бота.
+With a valid configuration, the application starts running and launches the Telegram bot.
 
-Для остановки используйте Ctrl+C.
+Press Ctrl+C to stop it.
 
-## Защита локальных данных
+## Protect local data
 
-Файлы `.env`, базы данных SQLite, виртуальное окружение
-и журналы работы исключены из Git через `.gitignore`.
+The `.env` file, SQLite database, virtual environment, and log files are excluded from Git through `.gitignore`.
 
-Перед публикацией изменений дополнительно проверяйте,
-что в них не попали пароли, ключи доступа и другие
-конфиденциальные сведения.
+Before publishing changes, also verify that they do not contain passwords, access tokens, or other sensitive information.
 
+## Running with systemd
 
-## Запуск через systemd
+For continuous operation on Linux, running ReleaseRadar as a systemd service is recommended.
 
-Для постоянной работы ReleaseRadar на Linux рекомендуется
-использовать службу systemd.
+The service starts automatically after system boot and restarts the application if it crashes.
 
-Служба обеспечивает автоматический запуск после загрузки
-системы и повторный запуск при аварийном завершении.
+### Project location
 
+The examples below assume that ReleaseRadar is installed in `/opt/releaseradar`.
 
-### Расположение проекта
+If you installed it elsewhere, adjust `WorkingDirectory` and `ExecStart` in the service file.
 
-В примерах ниже предполагается, что ReleaseRadar
-установлен в каталог `/opt/releaseradar`.
+`WorkingDirectory` is especially important because it determines the locations of `config.yaml`, the SQLite database, and the log file.
 
-Если проект был загружен в другой каталог, необходимо
-изменить `WorkingDirectory` и `ExecStart` в файле службы.
+Before starting the service, make sure the selected system user has the necessary permissions for the project directory.
 
-Параметр `WorkingDirectory` особенно важен:
-от него зависит расположение `config.yaml`,
-базы данных SQLite и файла журнала.
+### Create the service
 
-Перед запуском службы убедитесь, что выбранный
-системный пользователь имеет необходимые права
-доступа к каталогу проекта.
-
-
-### Создание службы
-
-Создайте файл:
+Create the file:
 
 ```bash
 sudo nano /etc/systemd/system/releaseradar.service
 ```
 
-Пример содержимого:
+Example contents:
 
 ```ini
 [Unit]
@@ -224,201 +193,181 @@ RestartSec=5
 WantedBy=multi-user.target
 ```
 
-Замените `<user>` на имя системного пользователя.
+Replace `<user>` with the system account name.
 
-Пути `WorkingDirectory` и `ExecStart` должны соответствовать
-фактическому расположению ReleaseRadar.
+`WorkingDirectory` and `ExecStart` must match the actual ReleaseRadar installation path.
 
-Указанный пользователь должен иметь права чтения настроек
-и записи в рабочую базу SQLite и каталог журналов.
+The selected user needs permission to read configuration files and write to the working SQLite database and log directory.
 
-### Включение службы
+### Enable the service
 
-После создания или изменения файла службы выполните:
+After creating or changing the service file, run:
 
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable --now releaseradar.service
 ```
 
-Проверьте состояние:
+Check its status:
 
 ```bash
 systemctl status releaseradar.service
 ```
 
-### Управление службой
+### Manage the service
 
-Запуск:
+Start:
 
 ```bash
 sudo systemctl start releaseradar.service
 ```
 
-Остановка:
+Stop:
 
 ```bash
 sudo systemctl stop releaseradar.service
 ```
 
-Перезапуск:
+Restart:
 
 ```bash
 sudo systemctl restart releaseradar.service
 ```
 
-### Просмотр журналов
+### View service logs
 
-Последние 100 строк журнала службы:
+Last 100 service log lines:
 
 ```bash
 journalctl -u releaseradar.service -n 100 --no-pager
 ```
 
-Непрерывный просмотр новых записей:
+Follow new log entries:
 
 ```bash
 journalctl -u releaseradar.service -f
 ```
 
-Журнал текущей загрузки системы:
+Logs from the current system boot:
 
 ```bash
 journalctl -u releaseradar.service -b
 ```
 
-### Обновление ReleaseRadar
+### Update ReleaseRadar
 
-Перед обновлением рекомендуется сохранить резервную копию
-рабочей базы SQLite, файлов `config.yaml` и `.env`.
+Before updating, back up the working SQLite database and the `config.yaml` and `.env` files.
 
-Остановите службу:
+Stop the service:
 
 ```bash
 sudo systemctl stop releaseradar.service
 ```
 
-Обновите программные файлы проекта выбранным способом.
+Update the project files using your preferred method.
 
-Если изменился файл `requirements.txt`, обновите зависимости:
+If `requirements.txt` has changed, update the dependencies:
 
 ```bash
 .venv/bin/python -m pip install -r requirements.txt
 ```
 
-После обновления запустите службу:
+Start the service after updating:
 
 ```bash
 sudo systemctl start releaseradar.service
 ```
 
-Проверьте состояние и журнал:
+Check its status and logs:
 
 ```bash
 systemctl status releaseradar.service
 journalctl -u releaseradar.service -n 50 --no-pager
 ```
 
-При обычном обновлении исходного кода переносить или заменять
-рабочую базу SQLite не требуется.
+A normal source-code update does not require moving or replacing the working SQLite database.
 
-Если новая версия изменяет структуру базы данных,
-предварительно ознакомьтесь с примечаниями к выпуску.
+If the new version changes the database schema, read the release notes first.
 
+# Configuring config.yaml
 
+`config.yaml` contains general ReleaseRadar settings and the list of monitored applications.
 
-# Настройка config.yaml
+The file uses YAML. On startup, ReleaseRadar validates its structure, required fields, and allowed values.
 
-Файл `config.yaml` содержит общие настройки ReleaseRadar
-и список отслеживаемых программ.
+## General settings
 
-Файл записывается в формате YAML. При запуске ReleaseRadar
-проверяет его структуру, обязательные поля и допустимые значения.
-
-## Общие параметры
-
-| Параметр | Описание | Значение по умолчанию |
+| Setting | Description | Default |
 |---|---|---|
-| `timezone` | Часовой пояс для отображения времени | `UTC` |
-| `check_interval_seconds` | Интервал автоматических проверок в секундах | `3600` |
-| `max_parallel_checks` | Максимальное количество одновременных проверок | `4` |
-| `notification_button_retention` | Срок действия кнопок уведомлений | `30d` |
-| `software` | Список отслеживаемых программ | Обязательное поле |
+| `timezone` | Time zone used to display timestamps | `UTC` |
+| `check_interval_seconds` | Interval between automatic checks, in seconds | `3600` |
+| `max_parallel_checks` | Maximum number of concurrent checks | `4` |
+| `notification_button_retention` | Lifetime of notification buttons | `30d` |
+| `software` | List of monitored applications | Required |
 
-### Интервал проверки обновлений
+### Update check interval
 
-Параметр `check_interval_seconds` определяет время
-между автоматическими проверками выпусков.
+`check_interval_seconds` controls the interval between automatic release checks.
 
-Значение указывается в секундах и должно быть
-положительным целым числом.
+The value must be a positive integer expressed in seconds.
 
-Пример проверки каждые 30 минут:
+Example: check every 30 minutes.
 
 ```yaml
 check_interval_seconds: 1800
 ```
 
-Слишком маленький интервал может привести к превышению
-ограничений количества запросов GitHub и GitLab.
+A very short interval may exceed GitHub or GitLab API rate limits.
 
-Для обычного использования рекомендуется начинать
-с интервала 3600 секунд (один час).
+For normal use, start with 3600 seconds (one hour).
 
-### Часовой пояс
+### Time zone
 
-Параметр `timezone` использует названия из базы часовых поясов IANA.
+`timezone` uses names from the IANA time zone database.
 
-Например:
+For example:
 
 ```yaml
 timezone: "Asia/Kamchatka"
 ```
 
-Параметр `timezone` используется для отображения времени
-в сведениях о состоянии программ.
+`timezone` is used when displaying timestamps in application status information.
 
-Команда `/skipped` имеет отдельное правило отображения:
-даты пропущенных выпусков преобразуются в часовой пояс
-`Asia/Kamchatka` независимо от значения `timezone`.
+The `/skipped` command has a separate display rule: skipped-release dates are converted to the `Asia/Kamchatka` time zone regardless of the `timezone` setting.
 
-Все даты пропусков сохраняются в SQLite с указанием
-времени UTC. Преобразование выполняется только при выводе,
-поэтому изменение отображаемого часового пояса
-не изменяет сохранённые записи.
+All skip timestamps are stored in SQLite in UTC. Conversion happens only when displaying them, so changing the display time zone does not modify saved records.
 
-### Параллельные проверки
+### Concurrent checks
 
-Параметр `max_parallel_checks` принимает целые числа от 1 до 16.
+`max_parallel_checks` accepts integers from 1 to 16.
 
 ```yaml
 max_parallel_checks: 4
 ```
 
-### Срок действия кнопок
+### Button retention
 
-Параметр `notification_button_retention` определяет срок
-действия кнопок, связанных с уведомлениями о выпусках.
+`notification_button_retention` determines how long release-notification buttons remain valid.
 
-Допустимые единицы измерения:
+Supported units:
 
-- `h` — часы;
-- `d` — дни;
-- `w` — недели.
+- `h` — hours;
+- `d` — days;
+- `w` — weeks.
 
-Общий допустимый срок составляет от 14 до 120 дней.
+The allowed duration is from 14 to 120 days.
 
-Пример:
+Example:
 
 ```yaml
 notification_button_retention: 30d
 ```
 
-## Список программ
+## Software list
 
-Все отслеживаемые программы перечисляются в разделе `software`.
+All monitored applications are defined under `software`.
 
-Пример:
+Example:
 
 ```yaml
 software:
@@ -431,105 +380,94 @@ software:
     enabled: true
 ```
 
-### Обязательные поля программы
+### Required application fields
 
-| Поле | Назначение |
+| Field | Purpose |
 |---|---|
-| `id` | Уникальный идентификатор программы |
-| `name` | Отображаемое название программы |
-| `provider` | Источник выпусков: `github` или `gitlab` |
-| `repository` | Путь к репозиторию |
-| `channel` | Канал выпусков: `stable` или `prerelease` |
-| `current_version` | Первоначально указанная установленная версия |
-| `enabled` | Включение или отключение отслеживания |
+| `id` | Unique application identifier |
+| `name` | Display name |
+| `provider` | Release source: `github` or `gitlab` |
+| `repository` | Repository path |
+| `channel` | Release channel: `stable` or `prerelease` |
+| `current_version` | Initially configured installed version |
+| `enabled` | Enable or disable monitoring |
 
-Все перечисленные поля обязательны.
+All listed fields are required.
 
-### Идентификатор программы
+### Application identifier
 
-Поле `id` должно быть уникальным в пределах списка.
+`id` must be unique within the list.
 
-После начала отслеживания не рекомендуется менять идентификатор:
-он используется для связи программы с сохранённым состоянием
-в базе SQLite.
+Avoid changing an identifier once monitoring has begun: it links the application to its saved SQLite state.
 
-### Источник выпусков
+### Release source
 
-Поддерживаются два значения:
+Two values are supported:
 
 - `github` — GitHub Releases;
 - `gitlab` — GitLab Releases.
 
-Для GitHub путь к репозиторию имеет вид:
+A GitHub repository path has the format:
 
 `owner/repository`
 
-Для GitLab также поддерживаются вложенные группы:
+GitLab also supports nested groups:
 
 `group/subgroup/project`
 
-Указывать полный адрес репозитория в поле `repository` не нужно.
+Do not enter a full repository URL in `repository`.
 
-### Каналы выпусков
+### Release channels
 
-`stable` — отслеживание выпусков, прошедших фильтрацию
-предварительных версий.
+`stable` monitors releases after filtering out prerelease versions.
 
-`prerelease` — отслеживание выпусков с разрешёнными
-предварительными версиями.
+`prerelease` allows prerelease versions to be considered.
 
-Особенности определения предварительных выпусков
-зависят от источника и описаны далее.
+The details of prerelease detection depend on the provider and are explained below.
 
-### Установленная версия
+### Installed version
 
-Поле `current_version` задаёт первоначальную версию
-при создании записи программы.
+`current_version` sets the initial installed version when the application record is first created.
 
-После этого состояние установленной версии хранится
-в SQLite и изменяется при подтверждении обновления.
+After that, the installed version is stored in SQLite and changes when an update is confirmed.
 
-Номер версии рекомендуется заключать в кавычки YAML:
+Quote version numbers in YAML:
 
 ```yaml
 current_version: "2.9"
 ```
 
-Это предотвращает автоматическое преобразование некоторых
-значений в числа.
+This prevents some values from being automatically interpreted as numbers.
 
-### Включение отслеживания
+### Enable monitoring
 
 ```yaml
 enabled: true
 ```
 
-Значение `true` включает программу в проверки.
+`true` includes the application in checks.
 
-Значение `false` исключает программу из проверок,
-не требуя удаления её описания из конфигурации.
+`false` excludes it from checks without requiring you to remove its configuration.
 
+## Additional GitHub settings
 
+### Release filtering
 
-## Дополнительные настройки GitHub
+GitHub supports the `release_filter` option.
 
-### Фильтрация выпусков
+It determines how ReleaseRadar distinguishes stable releases from prereleases.
 
-Для GitHub поддерживается параметр `release_filter`.
+Allowed values:
 
-Он определяет, каким способом программа отличает стабильные выпуски от предварительных.
-
-Допустимые значения:
-
-| Режим | Поведение |
+| Mode | Behavior |
 |---|---|
-| `strict` | Исключает выпуски, отмеченные предварительными в GitHub, а также версии, распознанные как предварительные по номеру |
-| `github` | Учитывает только отметку предварительного выпуска, установленную в GitHub |
-| `version` | Определяет предварительный выпуск только по обозначению версии |
+| `strict` | Excludes releases marked as prereleases on GitHub and versions recognized as prereleases by their version numbers |
+| `github` | Uses only GitHub's prerelease flag |
+| `version` | Determines prerelease status using only the version string |
 
-По умолчанию используется `strict`.
+The default is `strict`.
 
-Пример:
+Example:
 
 ```yaml
 software:
@@ -543,47 +481,47 @@ software:
     enabled: true
 ```
 
-Параметр `release_filter` применяется при выборе канала `stable`.
+`release_filter` applies when `channel: stable` is selected.
 
-При выборе `channel: prerelease` допускаются как стабильные, так и предварительные выпуски независимо от режима фильтрации. Черновики выпусков всегда исключаются.
+With `channel: prerelease`, both stable and prerelease versions are allowed regardless of the filtering mode. Draft releases are always excluded.
 
-### Особенности определения версий
+### Version detection details
 
-GitHub позволяет разработчикам вручную отмечать выпуски как предварительные.
+GitHub lets maintainers manually mark releases as prereleases.
 
-Однако эта отметка не всегда соответствует обозначению версии. Например, выпуск с номером `v2.0.0-beta.1` может не иметь отметки предварительного выпуска.
+However, that flag does not always match the version string. For example, a release tagged `v2.0.0-beta.1` may not be marked as a prerelease.
 
-Режим `strict` учитывает оба признака, поэтому рекомендуется для большинства программ.
+`strict` considers both indicators and is recommended for most applications.
 
-ReleaseRadar использует библиотеку `packaging` для разбора номеров версий. Если номер не удаётся разобрать, режимы `strict` и `version` не смогут определить предварительный статус по самому номеру.
+ReleaseRadar uses the `packaging` library to parse version numbers. If a version cannot be parsed, `strict` and `version` cannot determine its prerelease status from the version string itself.
 
-### Ключ доступа GitHub
+### GitHub access token
 
-Для запросов к GitHub используется необязательная переменная окружения:
+An optional environment variable is used for GitHub requests:
 
 ```dotenv
 GITHUB_TOKEN=YOUR_GITHUB_TOKEN
 ```
 
-Ключ указывается в файле `.env`.
+Set the token in `.env`.
 
-Если переменная отсутствует или пуста, запросы выполняются без авторизации.
+If the variable is missing or empty, requests are made without authentication.
 
-Ключ может потребоваться для доступа к закрытым репозиториям или увеличения доступного количества запросов к GitHub API.
+A token may be needed for private repositories or to increase the available GitHub API request quota.
 
-При отклонении ключа сервером GitHub программа сообщает об ошибке авторизации.
+If GitHub rejects the token, ReleaseRadar reports an authentication error.
 
-## Дополнительные настройки GitLab
+## Additional GitLab settings
 
-### Адрес сервера
+### Server URL
 
-Параметр `gitlab_url` позволяет указать собственный сервер GitLab.
+`gitlab_url` lets you specify a self-hosted GitLab server.
 
-По умолчанию используется:
+The default is:
 
 `https://gitlab.com`
 
-Пример:
+Example:
 
 ```yaml
 software:
@@ -597,37 +535,37 @@ software:
     enabled: true
 ```
 
-Адрес должен использовать HTTPS.
+The URL must use HTTPS.
 
-Не допускаются дополнительные пути, параметры запроса и встроенные учётные данные.
+Additional URL paths, query parameters, and embedded credentials are not allowed.
 
-### Ключ доступа GitLab
+### GitLab access token
 
-Параметр `token_env` задаёт имя переменной окружения, из которой ReleaseRadar получает ключ доступа.
+`token_env` specifies the name of the environment variable from which ReleaseRadar reads the access token.
 
-Пример в `config.yaml`:
+Example in `config.yaml`:
 
 ```yaml
 token_env: GITLAB_TOKEN
 ```
 
-Соответствующая запись в `.env`:
+Corresponding entry in `.env`:
 
 ```dotenv
 GITLAB_TOKEN=YOUR_GITLAB_TOKEN
 ```
 
-В `token_env` указывается именно имя переменной, а не сам секретный ключ.
+`token_env` contains the variable name, not the secret token itself.
 
-Если `token_env` задан, но соответствующая переменная отсутствует или пуста, проверка завершится ошибкой.
+If `token_env` is set but the corresponding variable is missing or empty, the check fails.
 
-Если параметр `token_env` не указан, запросы выполняются без ключа доступа.
+If `token_env` is omitted, requests are made without an access token.
 
-### Определение предварительных выпусков
+### Prerelease detection
 
-В GitLab предварительный статус выпуска определяется по обозначению версии.
+On GitLab, prerelease status is determined from the version string.
 
-По умолчанию распознаются следующие обозначения:
+The following markers are recognized by default:
 
 - `alpha`
 - `beta`
@@ -637,236 +575,188 @@ GITLAB_TOKEN=YOUR_GITLAB_TOKEN
 - `dev`
 - `snapshot`
 
-Например, версии `v2.0.0-beta.1` и `v3.0.0-rc1` будут считаться предварительными.
+For example, `v2.0.0-beta.1` and `v3.0.0-rc1` are considered prereleases.
 
-Для изменения правил используется параметр `prerelease_pattern`.
+Use `prerelease_pattern` to customize these rules.
 
-Пример:
+Example:
 
 ```yaml
 prerelease_pattern: '(?i)(?:alpha|beta|rc|dev)'
 ```
 
-Значение представляет собой регулярное выражение Python.
+The value is a Python regular expression.
 
-Если параметр не указан, используется встроенное выражение.
+If omitted, the built-in expression is used.
 
-Некорректные регулярные выражения отклоняются при проверке конфигурации.
+Invalid regular expressions are rejected during configuration validation.
 
-Для канала `stable` предварительные выпуски исключаются.
+The `stable` channel excludes prereleases.
 
-Для канала `prerelease` допускаются оба типа выпусков.
+The `prerelease` channel allows both release types.
 
-### Особенности выбора выпуска GitLab
+### GitLab release selection details
 
-GitLab проверяется по дате публикации выпуска (`released_at`).
+GitLab releases are checked by publication date (`released_at`).
 
-ReleaseRadar исключает выпуски, дата публикации которых находится в будущем, и выбирает наиболее поздний опубликованный выпуск, подходящий под выбранный канал.
+ReleaseRadar excludes releases whose publication dates are in the future and selects the most recently published release that matches the chosen channel.
 
-Это отличается от GitHub, где выбор подходящего выпуска выполняется с учётом разбора и сравнения номеров версий.
+This differs from GitHub, where matching releases are selected using parsed and compared version numbers.
 
+# Telegram management
 
+ReleaseRadar provides commands to view application status, manually check for updates, and manage detected releases.
 
-# Управление через Telegram
+Management is available only to the owner specified by `TELEGRAM_CHAT_ID`, in a private chat with the bot.
 
-ReleaseRadar предоставляет команды для просмотра состояния программ,
-ручной проверки обновлений и управления обнаруженными выпусками.
+## Available commands
 
-Управление доступно только владельцу, указанному в
-`TELEGRAM_CHAT_ID`, в личном чате с ботом.
-
-## Доступные команды
-
-| Команда | Назначение |
+| Command | Purpose |
 |---|---|
-| `/status` | Показать состояние отслеживаемых программ |
-| `/check` | Запустить ручную проверку обновлений |
-| `/pending` | Повторно отправить уведомления о неподтверждённых обновлениях |
-| `/confirm` | Подтвердить установку обнаруженного обновления |
-| `/skipped` | Показать историю пропущенных выпусков |
+| `/status` | Show monitored application status |
+| `/check` | Run a manual update check |
+| `/pending` | Resend notifications about unconfirmed updates |
+| `/confirm` | Confirm installation of a detected update |
+| `/skipped` | Show skipped-release history |
 
-## Просмотр состояния — /status
+## View status — /status
 
-Команда показывает сведения об отслеживаемых программах
-на основании сохранённого состояния.
+Shows information about monitored applications based on their saved state.
 
-Позволяет узнать установленные и обнаруженные версии,
-а также состояние проверок.
+You can view installed and detected versions, as well as check status.
 
-## Ручная проверка — /check
+## Manual check — /check
 
-После вызова команды появляется список включённых программ.
+After invoking the command, the bot displays a list of enabled applications.
 
-Можно выбрать одну программу либо нажать
-«Проверить все».
+Select an individual application or press “Check all”.
 
-Если программ много, список разделяется на страницы
-по восемь программ.
+If there are many applications, the list is paginated with eight applications per page.
 
-Повторный запуск проверки, которая уже выполняется
-или ожидает выполнения, отклоняется.
+A check that is already running or queued cannot be started again.
 
-Результат проверки отправляется отдельным сообщением.
+Check results are sent in a separate message.
 
-## Повторные уведомления — /pending
+## Repeat notifications — /pending
 
-Команда повторно отправляет уведомления
-о доступных, но ещё не подтверждённых обновлениях.
+Resends notifications for available updates that have not yet been confirmed.
 
-Перед отправкой ReleaseRadar повторно обращается
-к источнику и проверяет актуальность выпуска.
+Before sending, ReleaseRadar queries the source again and verifies that the release is still current.
 
-Пропущенные выпуски исключаются из повторной отправки.
+Skipped releases are excluded from repeated notifications.
 
-Команда не изменяет установленную версию
-и не подтверждает обновления.
+This command does not change the installed version or confirm updates.
 
-## Подтверждение установки — /confirm
+## Confirm installation — /confirm
 
-Команда показывает программы с обнаруженными,
-но ещё не подтверждёнными обновлениями.
+Shows applications with detected but unconfirmed updates.
 
-После выбора программы бот предлагает
-подтвердить установку обнаруженной версии.
+After you select an application, the bot asks you to confirm installation of the detected version.
 
-Подтверждение изменяет сохранённую установленную
-версию в базе SQLite.
+Confirmation updates the saved installed version in SQLite.
 
-Команда не выполняет установку программного обеспечения
-на сервере или других устройствах.
+The command does not actually install software on the server or any other device.
 
-Перед изменением состояния проверяется актуальность
-запроса подтверждения.
+The confirmation request is checked for validity before the state is changed.
 
-Срок действия запроса подтверждения ограничен одним часом.
+A confirmation request expires after one hour.
 
-## Пропуск выпуска
+## Skip a release
 
-В уведомлении о новом выпуске предусмотрена
-кнопка «Пропустить версию».
+New-release notifications include a “Skip version” button.
 
-После нажатия бот запрашивает причину пропуска.
-Причина отправляется обычным текстовым сообщением.
+When pressed, the bot asks for a reason. Send the reason as a normal text message.
 
-Максимальная длина причины — 1000 символов.
+The maximum reason length is 1,000 characters.
 
-Пользователь может отменить ввод причины
-с помощью кнопки «Отмена».
+You can cancel the request using the “Cancel” button.
 
-Пропуск конкретного выпуска не изменяет
-установленную версию программы.
+Skipping a release does not change the application's installed version.
 
-Повторные уведомления о пропущенном выпуске
-не отправляются, но следующие выпуски
-продолжают отслеживаться.
+Repeated notifications for that release are suppressed, but subsequent releases continue to be monitored.
 
-Одновременно допускается только один незавершённый
-запрос ввода причины для пользователя.
+Only one unfinished reason-entry request per user is allowed at a time.
 
-## История пропусков — /skipped
+## Skip history — /skipped
 
-Команда показывает последние 20 пропущенных выпусков.
+Shows the 20 most recently skipped releases.
 
-Для каждого выпуска отображаются:
+For each release, the bot displays:
 
-- название программы;
-- номер версии;
-- причина пропуска;
-- дата и время пропуска.
+- application name;
+- version number;
+- reason for skipping;
+- date and time of the skip.
 
-Время отображается по часовому поясу Камчатки.
+Times are displayed in the Kamchatka time zone.
 
-Если в базе больше 20 записей, бот сообщает
-общее количество пропущенных выпусков.
+If the database contains more than 20 records, the bot reports the total number of skipped releases.
 
-Полная история продолжает храниться в SQLite,
-даже если отдельные записи не отображаются командой.
+The full history remains in SQLite even when some records are not displayed by the command.
 
-## Работа с кнопками
+## Button handling
 
-Кнопки уведомлений имеют ограниченный срок действия,
-который задаётся параметром
-`notification_button_retention`.
+Notification buttons have a limited lifetime set by `notification_button_retention`.
 
-При обработке нажатия ReleaseRadar проверяет
-действительность кнопки и актуальность выпуска.
+When a button is pressed, ReleaseRadar checks that the button is valid and the release is still current.
 
-Повторное нажатие не должно приводить
-к повторному подтверждению или пропуску выпуска.
+Repeated presses must not result in duplicate confirmations or skips.
 
-Для отмены ввода причины используются отдельные
-идентификаторы запросов. Устаревшая кнопка отмены
-не может отменить другой запрос.
+Separate request identifiers are used for canceling reason entry. An outdated cancel button cannot cancel another request.
 
-## Ограничение доступа
+## Access restrictions
 
-Управление ботом разрешено только настроенному владельцу
-в личном чате Telegram.
+Only the configured owner can manage the bot, and only in a private Telegram chat.
 
-Для определения владельца используется числовой
-идентификатор `TELEGRAM_CHAT_ID`.
+The numeric `TELEGRAM_CHAT_ID` identifies the owner.
 
-Не передавайте ключ Telegram-бота посторонним лицам.
+Do not share your Telegram bot token with anyone else.
 
+# Data storage
 
+ReleaseRadar uses SQLite to store application state, skipped-release history, and notification button information.
 
-# Хранение данных
+## Database location
 
-ReleaseRadar использует базу данных SQLite для сохранения
-состояния программ, истории пропущенных выпусков и сведений
-о кнопках уведомлений.
-
-## Расположение базы данных
-
-По умолчанию используется файл:
+The default database file is:
 
 `release-radar.db`
 
-Путь к нему определяется относительно рабочего каталога
-процесса ReleaseRadar.
+Its path is relative to the ReleaseRadar process working directory.
 
-При запуске через systemd рабочий каталог задаётся
-параметром `WorkingDirectory`.
+When running under systemd, the working directory is defined by `WorkingDirectory`.
 
-База и необходимые таблицы создаются при первоначальном
-запуске программы.
+The database and required tables are created on the first run.
 
-## Структура базы данных
+## Database structure
 
-| Таблица | Назначение |
+| Table | Purpose |
 |---|---|
-| `software_state` | Установленные и обнаруженные версии, сведения о проверках и ошибках |
-| `notification_buttons` | Идентификаторы кнопок уведомлений и время их создания |
-| `skipped_releases` | История пропущенных выпусков, причины и даты пропуска |
+| `software_state` | Installed and detected versions, check details, and errors |
+| `notification_buttons` | Notification button identifiers and creation timestamps |
+| `skipped_releases` | Skipped-release history, reasons, and timestamps |
 
-В таблице `skipped_releases` сочетание идентификатора
-программы и версии уникально.
+In `skipped_releases`, the combination of application identifier and version is unique.
 
-Повторный пропуск одного выпуска не создаёт новую запись
-и не заменяет ранее сохранённую причину.
+Skipping the same release again does not create a new record or replace the previously saved reason.
 
-## Сохранение состояния
+## State persistence
 
-Данные SQLite сохраняются между перезапусками программы.
+SQLite data persists across application restarts.
 
-Первоначальная версия задаётся в `config.yaml`,
-после чего установленная версия хранится в базе данных.
+The initial version comes from `config.yaml`; afterward, the installed version is stored in the database.
 
-Удаление базы приведёт к потере сохранённого состояния,
-истории пропусков и сведений о кнопках уведомлений.
+Deleting the database loses saved state, skip history, and notification button records.
 
-При повторном создании базы начальное состояние программ
-будет формироваться из конфигурации.
+If the database is recreated, initial application state is taken from the configuration.
 
-## Резервное копирование
+## Backups
 
-Перед обновлениями, переносом или изменением структуры
-базы рекомендуется создавать резервную копию.
+Create a backup before updates, migrations, or database schema changes.
 
-Наиболее простой способ — остановить службу и скопировать
-файл базы данных.
+The simplest method is to stop the service and copy the database file.
 
-Пример для установки в `/opt/releaseradar`:
+Example for an installation in `/opt/releaseradar`:
 
 ```bash
 sudo systemctl stop releaseradar.service
@@ -875,131 +765,111 @@ cp /opt/releaseradar/release-radar.db \
 sudo systemctl start releaseradar.service
 ```
 
-Команда копирования предполагает, что текущий пользователь
-имеет необходимые права доступа.
+The copy command assumes the current user has the necessary permissions.
 
-При переносе ReleaseRadar на другой сервер важно сохранить
-его рабочую базу отдельно от базы среды разработки.
+When moving ReleaseRadar to another server, keep its working database separate from the development environment database.
 
-# Диагностика и устранение ошибок
+# Troubleshooting
 
-## Журнал работы
+## Application logs
 
-ReleaseRadar записывает сообщения о своей работе
-в файл:
+ReleaseRadar writes operational messages to:
 
 `release-radar.log`
 
-Также сообщения выводятся в стандартный поток вывода,
-поэтому при запуске через systemd их можно просматривать
-с помощью `journalctl`.
+Messages are also written to standard output, so you can inspect them with `journalctl` when running under systemd.
 
-Просмотр последних 100 строк журнала:
+View the last 100 log lines:
 
 ```bash
 journalctl -u releaseradar.service -n 100 --no-pager
 ```
 
-Непрерывное наблюдение за журналом:
+Follow new log entries:
 
 ```bash
 journalctl -u releaseradar.service -f
 ```
 
-В журнале могут содержаться сведения о проверках,
-обнаруженных версиях, ошибках получения выпусков
-и состоянии работы Telegram-бота.
+Logs may contain information about checks, detected versions, release-fetching errors, and Telegram bot operation.
 
-В ReleaseRadar предусмотрено сокрытие известных
-форматов секретных ключей и значений секретных
-переменных окружения.
+ReleaseRadar masks known secret-token formats and values of secret environment variables.
 
-Перед передачей журналов третьим лицам всё равно
-необходимо проверять их содержимое.
+Nevertheless, inspect logs before sharing them with third parties.
 
-## Ошибки config.yaml
+## config.yaml errors
 
-Если программа не запускается из-за ошибки конфигурации,
-проверьте:
+If the application cannot start due to a configuration error, check:
 
-- правильность отступов YAML;
-- наличие обязательных параметров;
-- уникальность идентификаторов программ;
-- допустимость значений `provider` и `channel`;
-- правильность адресов репозиториев;
-- корректность дополнительных параметров.
+- YAML indentation;
+- required settings;
+- uniqueness of application identifiers;
+- allowed `provider` and `channel` values;
+- repository paths;
+- additional settings.
 
-Ошибки синтаксиса YAML могут сопровождаться указанием
-строки и столбца.
+YAML syntax errors may include line and column numbers.
 
-## Ошибки Telegram
+## Telegram errors
 
-Если бот не отвечает, проверьте наличие переменных:
+If the bot does not respond, check that these variables are set:
 
 - `TELEGRAM_BOT_TOKEN`;
 - `TELEGRAM_CHAT_ID`.
 
-Убедитесь, что ключ бота действителен, числовой
-идентификатор указан правильно и сервер имеет
-доступ к Telegram.
+Verify that the token is valid, the numeric identifier is correct, and the server can reach Telegram.
 
-Управляющие команды предназначены для личного чата
-настроенного владельца.
+Management commands are intended for the configured owner's private chat.
 
-## Ошибки GitHub и GitLab
+## GitHub and GitLab errors
 
-При ошибках получения выпусков проверьте:
+If releases cannot be retrieved, check:
 
-- доступность сервера источника;
-- правильность пути `repository`;
-- существование выпусков в репозитории;
-- правильность ключа доступа, если он используется;
-- ограничения количества запросов;
-- выбранный канал выпусков;
-- настройки фильтрации предварительных версий.
+- source server availability;
+- the `repository` path;
+- whether the repository has releases;
+- access token validity, if a token is used;
+- API rate limits;
+- the selected release channel;
+- prerelease filtering settings.
 
-Для GitLab также проверьте значение `gitlab_url`
-и имя переменной `token_env`.
+For GitLab, also check `gitlab_url` and the `token_env` variable name.
 
-Отсутствие подходящего выпуска не обязательно означает
-неисправность: он мог быть исключён выбранными правилами.
+A missing matching release does not necessarily indicate an error: the selected rules may have filtered it out.
 
-## Ошибки базы данных
+## Database errors
 
-Если ReleaseRadar не может сохранить состояние, проверьте:
+If ReleaseRadar cannot save state, check:
 
-- существование рабочего каталога;
-- права пользователя службы на запись;
-- наличие свободного места на диске;
-- доступность файла `release-radar.db`;
-- сообщения об ошибках SQLite в журнале.
+- that the working directory exists;
+- that the service user has write permissions;
+- available disk space;
+- accessibility of `release-radar.db`;
+- SQLite error messages in the logs.
 
-Не удаляйте рабочую базу ради устранения ошибки,
-не выяснив её причину и не сохранив резервную копию.
+Do not delete the working database to fix an error without identifying the cause and creating a backup.
 
-## Служба не запускается
+## Service fails to start
 
-Проверьте её состояние:
+Check its status:
 
 ```bash
 systemctl status releaseradar.service
 ```
 
-Затем изучите сообщения текущей загрузки:
+Then inspect logs for the current boot:
 
 ```bash
 journalctl -u releaseradar.service -b --no-pager
 ```
 
-Проверьте правильность `WorkingDirectory`, `ExecStart`
-и наличие виртуального окружения Python.
+Verify `WorkingDirectory`, `ExecStart`, and the presence of the Python virtual environment.
 
-После изменения файла службы выполните:
+After modifying the service file, run:
 
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl restart releaseradar.service
 ```
 
-Если служба запускается, но программа работает неправильно,
-проверьте её собственный журнал и конфигурацию.
+If the service starts but the application does not work correctly, inspect its own log and configuration.
