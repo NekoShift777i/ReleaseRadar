@@ -1,112 +1,110 @@
-ReleaseRadar — история изменений
-===============================
+ReleaseRadar — Changelog
+========================
 
-Версия 1.2.0 — подготовка к выпуску
-----------------------------------
+Version 1.2.0 — preparing for release
+-------------------------------------
 
-Добавлено:
-- Ручная проверка отдельных программ через кнопки Telegram.
-- Постраничный выбор программ в команде /check.
-- Параллельная проверка нескольких программ.
-- Проверка структуры и параметров конфигурации.
-- Настраиваемый срок действия кнопок уведомлений.
-- Автоматическая очистка устаревших кнопок и служебных записей.
-- Пропуск отдельных выпусков с указанием причины.
-- Сохранение истории пропущенных выпусков в SQLite.
-- Команда /skipped для просмотра истории пропусков.
-- Дополнительные автоматические проверки основных функций.
-- Отслеживание Actual Budget, Frigate NVR и HeliBoard.
+Added:
+- Manual checks for individual software entries using Telegram buttons.
+- Paginated software selection in the /check command.
+- Parallel checks for multiple software entries.
+- Validation of configuration structure and parameters.
+- Configurable notification button lifetime.
+- Automatic cleanup of expired buttons and service records.
+- Skipping individual releases with a reason.
+- Persistent skipped-release history in SQLite.
+- The /skipped command to view skipped-release history.
+- Additional automated tests for core functionality.
+- Tracking for Actual Budget, Frigate NVR, and HeliBoard.
 
-Улучшено:
-- Проверка авторизации команд и нажатий кнопок Telegram.
-- Защита от одновременных проверок одной программы.
-- Обработка ошибок получения выпусков и отображение состояния.
-- Безопасное редактирование существующих сообщений Telegram.
-- Сравнение версий и выбор подходящего выпуска.
-- Защита от повторных нажатий и устаревших кнопок.
-- Независимая отмена запросов подтверждения и пропуска.
-- Исключение пропущенных выпусков из повторных уведомлений.
-- Отображение дат пропусков по камчатскому времени.
-- Документация по установке, настройке и обслуживанию.
+Improved:
+- Authorization checks for Telegram commands and button presses.
+- Protection against concurrent checks of the same software entry.
+- Release retrieval error handling and status display.
+- Safe editing of existing Telegram messages.
+- Version comparison and selection of suitable releases.
+- Protection against repeated button presses and expired buttons.
+- Independent cancellation of confirmation and skip requests.
+- Exclusion of skipped releases from repeated notifications.
+- Display of skip dates in Kamchatka local time.
+- Installation, configuration, and maintenance documentation.
 
-Исправлено:
-- Устранены отдельные ошибки при сохранении состояния в SQLite.
-- Устранены повторные запросы проверки одной программы.
-- Исправлена обработка устаревших запросов подтверждения.
-- Исключена возможность отмены нового пропуска старой кнопкой.
+Fixed:
+- Several errors when saving state in SQLite.
+- Duplicate check requests for the same software entry.
+- Handling of expired confirmation requests.
+- Old buttons can no longer cancel a newer skip request.
 
-Изменения базы данных:
-- Добавлено поле created_at для кнопок уведомлений.
-- Реализовано обновление структуры существующей базы.
-- Добавлена таблица истории пропущенных выпусков.
+Database changes:
+- Added the created_at field for notification buttons.
+- Implemented schema updates for existing databases.
+- Added a table for skipped-release history.
 
-Примечания:
-- Подтверждение обновления изменяет сохранённую версию,
-  но не устанавливает программное обеспечение.
-- Перед обновлением рекомендуется сохранить резервную копию SQLite.
-- История пропусков сохраняется между перезапусками.
+Notes:
+- Confirming an update changes the stored version but does not install
+  the software.
+- Backing up the SQLite database before upgrading is recommended.
+- Skipped-release history persists across restarts.
 
-Версия 1.1.1
-------------
+Version 1.1.1
+-------------
 
-Добавлено:
-- Параметр release_filter для выбора способа фильтрации выпусков GitHub.
-- Поддержка режимов фильтрации strict, github и version.
+Added:
+- The release_filter parameter for choosing how GitHub releases are filtered.
+- Support for strict, github, and version filtering modes.
 
-Улучшено:
-- Обработка временных сетевых ошибок Telegram.
+Improved:
+- Handling of temporary Telegram network errors.
 
-Исправлено:
-- Устранён избыточный вывод трассировок при сбоях соединения с Telegram.
+Fixed:
+- Excessive traceback output when Telegram connections fail.
 
-Версия 1.1.0 — 01.11.2026
-------------------------
-
-Добавлено:
-- Поддержка необязательного личного ключа доступа GitHub через переменную
-  GITHUB_TOKEN в файле .env. При отсутствии ключа запросы выполняются
-  без авторизации.
-- Команда /pending для повторной отправки уведомлений о неподтверждённых
-  обновлениях с кнопкой «Версия обновлена».
-- Встроенное меню команд Telegram с описаниями доступных команд.
-- Библиотека packaging для сравнения номеров версий.
-
-Улучшено:
-- Сообщения об ошибках config.yaml теперь содержат индекс записи
-  software[N] и, если доступны, название программы и её идентификатор.
-- Защита журналов: скрытие известных секретов в сообщениях и исключениях,
-  ограничение подробности журналирования httpx и httpcore.
-- Определение обновлений GitHub: для стабильного канала выбирается
-  максимальная стабильная версия из списка выпусков, а не только выпуск,
-  помеченный GitHub как последний.
-
-Исправлено:
-- Более старая версия больше не должна считаться новым обновлением
-  только из-за несовпадения номеров версий.
-- Добавлена отдельная обработка ошибок авторизации и ограничений
-  запросов GitHub.
-
-Примечания:
-- После обновления зависимостей необходимо выполнить:
-  pip install -r requirements.txt
-- Существующие записи журналов с секретами автоматически не очищаются.
-- Повторное уведомление не изменяет сохранённую текущую версию программы.
-
-Версия 1.0.1 — 25.10.2026
+Version 1.1.0 — 2026-11-01
 --------------------------
 
-Исправлено:
-- Обработка сигнала SIGTERM при завершении работы ReleaseRadar.
+Added:
+- Optional personal GitHub access token through the GITHUB_TOKEN variable
+  in .env. Requests are unauthenticated when no token is provided.
+- The /pending command to resend notifications about unconfirmed updates,
+  including a "Version updated" button.
+- Built-in Telegram command menu with descriptions of available commands.
+- The packaging library for version comparison.
 
-Версия 1.0.0 — исходный выпуск
------------------------------
+Improved:
+- config.yaml error messages now include the software[N] entry index and,
+  when available, the software name and identifier.
+- Log protection: known secrets are redacted from messages and exceptions;
+  httpx and httpcore logging verbosity is reduced.
+- GitHub update detection: the stable channel now selects the highest
+  stable version from the release list rather than relying solely on
+  the release marked as latest by GitHub.
 
-- Отслеживание обновлений программ через GitHub и GitLab.
-- Настройка отслеживаемых программ через config.yaml.
-- Периодическая проверка обновлений.
-- Уведомления через Telegram с возможностью подтверждения обновления.
-- Хранение состояния отслеживаемых программ.
-- Команды проверки и просмотра состояния.
-- Работа в качестве службы Linux.
+Fixed:
+- An older version should no longer be treated as a new update merely
+  because the version strings differ.
+- Separate handling for GitHub authentication and rate-limit errors.
 
-Примечание: точная дата первоначального выпуска здесь не указана.
+Notes:
+- After updating dependencies, run:
+  pip install -r requirements.txt
+- Existing log entries containing secrets are not cleaned automatically.
+- Resending a notification does not change the stored current version.
+
+Version 1.0.1 — 2026-10-25
+--------------------------
+
+Fixed:
+- Handling of the SIGTERM signal when shutting down ReleaseRadar.
+
+Version 1.0.0 — initial release
+-------------------------------
+
+- Software update tracking through GitHub and GitLab.
+- Configuration of tracked software through config.yaml.
+- Periodic update checks.
+- Telegram notifications with update confirmation.
+- Persistent state for tracked software.
+- Commands for checking updates and viewing status.
+- Operation as a Linux service.
+
+Note: The exact date of the initial release is not specified here.
