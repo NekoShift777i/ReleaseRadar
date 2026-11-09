@@ -32,3 +32,6 @@ VersionArchive/
 *.patch
 Patches/
 Patches
+
+# Configurations
+config.yaml
