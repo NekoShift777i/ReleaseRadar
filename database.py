@@ -163,6 +163,19 @@ def initialize_database() -> None:
             """
         )
 
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS version_change_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                software_id TEXT NOT NULL,
+                old_version TEXT,
+                new_version TEXT NOT NULL,
+                changed_at TEXT NOT NULL,
+                source TEXT NOT NULL
+            )
+            """
+        )
+
         button_columns = {
             row["name"]
             for row in connection.execute(
@@ -289,18 +302,63 @@ def update_software_check(
 
 
 
-def mark_version_updated(software_id: str, version: str) -> bool:
-    """Confirm only the release attached to the button, atomically."""
+def mark_version_updated(
+    software_id: str,
+    version: str,
+    source: str = "unknown",
+) -> bool:
+    """Подтвердить версию и сохранить историю изменения."""
     with get_connection() as connection:
+        state = connection.execute(
+            """
+            SELECT current_version
+            FROM software_state
+            WHERE software_id = ?
+            """,
+            (software_id,),
+        ).fetchone()
+
+        if state is None:
+            return False
+
+        old_version = state["current_version"]
+
         cursor = connection.execute(
             """
             UPDATE software_state
             SET current_version = ?
-            WHERE software_id = ? AND latest_version = ? AND current_version != ?
+            WHERE software_id = ?
+              AND latest_version = ?
+              AND current_version != ?
             """,
             (version, software_id, version, version),
         )
-        return cursor.rowcount == 1
+
+        if cursor.rowcount != 1:
+            return False
+
+        connection.execute(
+            """
+            INSERT INTO version_change_history (
+                software_id,
+                old_version,
+                new_version,
+                changed_at,
+                source
+            )
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                software_id,
+                old_version,
+                version,
+                datetime.now(timezone.utc).isoformat(),
+                source,
+            ),
+        )
+
+        return True
+
 
 
 def mark_version_notified(
