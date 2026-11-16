@@ -600,7 +600,14 @@ async def handle_version_updated(
         await query.answer("Не удалось обновить базу. Попробуйте ещё раз.", show_alert=True)
         return
 
-    await query.answer(answer, show_alert=show_alert)
+    try:
+        await query.answer(answer, show_alert=show_alert)
+    except TelegramError:
+        logger.warning(
+            "Failed to answer version confirmation callback",
+            exc_info=True,
+        )
+
     await edit_callback_message(query, reply_markup=None)
 
 

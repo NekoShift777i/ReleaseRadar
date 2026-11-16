@@ -579,6 +579,54 @@ class ButtonTests(unittest.IsolatedAsyncioTestCase):
             f"version_skip_cancel:v1:{request_token}",
         )
 
+    async def test_answer_failure_after_successful_confirmation(self):
+        data = self.button()
+
+        with patch(
+            "telegram_handlers.edit_callback_message",
+            new_callable=AsyncMock,
+        ) as edit_message:
+            with patch(
+                "telegram_handlers.mark_version_updated",
+                side_effect=db.mark_version_updated,
+            ) as mark_updated:
+                query = SimpleNamespace(
+                    data=data,
+                    answer=AsyncMock(side_effect=BadRequest("Query is too old")),
+                    edit_message_reply_markup=AsyncMock(),
+                    message=SimpleNamespace(
+                        text="Уведомление",
+                        reply_markup=object(),
+                    ),
+                )
+                update = SimpleNamespace(
+                    callback_query=query,
+                    effective_user=SimpleNamespace(id=12345),
+                    effective_chat=SimpleNamespace(id=12345, type="private"),
+                )
+                context = SimpleNamespace(
+                    user_data={},
+                    bot_data={
+                        "telegram_chat_id": 12345,
+                        "config": {
+                            "notification_button_retention": "30d",
+                        },
+                    },
+                )
+
+                with self.assertLogs("telegram_handlers", level="WARNING"):
+                    await handle_version_updated(update, context)
+
+                    self.assertEqual(
+                        db.get_software_state("xray")["current_version"],
+                        "v2",
+                    )
+                    mark_updated.assert_called_once_with("xray", "v2")
+                    edit_message.assert_awaited_once_with(
+                    query,
+                    reply_markup=None,
+                )
+
 
 if __name__ == "__main__":
     unittest.main()
