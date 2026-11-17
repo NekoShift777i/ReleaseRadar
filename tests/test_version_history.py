@@ -179,4 +179,20 @@ class VersionHistoryTests(unittest.TestCase):
             any("Software version changed:" in message for message in messages)
         )
 
+    def test_existing_state_is_not_overwritten_by_config(self):
+        db.initialize_database()
+        db.create_software_state("nextcloud", "v35.0.2")
 
+        state = db.get_or_create_software_state(
+            "nextcloud",
+            "v35.0.3",
+        )
+
+        self.assertEqual(state["current_version"], "v35.0.2")
+
+        with db.get_connection() as connection:
+            history_count = connection.execute(
+                "SELECT COUNT(*) FROM version_change_history"
+            ).fetchone()[0]
+
+        self.assertEqual(history_count, 0)

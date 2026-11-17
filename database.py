@@ -253,6 +253,11 @@ def create_software_state(
                 current_version,
             ),
         )
+        logger.info(
+            "Software state created: software=%s, current_version=%s",
+            software_id,
+            current_version,
+        )
 
 
 
