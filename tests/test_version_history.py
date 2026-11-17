@@ -123,3 +123,60 @@ class VersionHistoryTests(unittest.TestCase):
         self.assertEqual(state["current_version"], "v1")
         self.assertEqual(history_count, 0)
 
+    def test_successful_confirmation_is_logged(self):
+        db.initialize_database()
+        db.create_software_state("xray", "v1")
+        db.update_software_check("xray", "v2", "now")
+
+        with self.assertLogs("database", level="INFO") as captured:
+            result = db.mark_version_updated(
+                "xray",
+                "v2",
+                source="telegram_confirm",
+            )
+
+        self.assertTrue(result)
+        self.assertEqual(len(captured.records), 1)
+
+        message = captured.records[0].getMessage()
+        self.assertIn("software=xray", message)
+        self.assertIn("old=v1", message)
+        self.assertIn("new=v2", message)
+        self.assertIn("source=telegram_confirm", message)
+
+    def test_failed_history_write_is_not_logged_as_success(self):
+        db.initialize_database()
+        db.create_software_state("xray", "v1")
+        db.update_software_check("xray", "v2", "now")
+
+        with db.get_connection() as connection:
+            connection.execute(
+                """
+                CREATE TRIGGER reject_version_history
+                BEFORE INSERT ON version_change_history
+                BEGIN
+                    SELECT RAISE(ABORT, 'History write failed');
+                END
+                """
+            )
+
+        with self.assertLogs("database", level="INFO") as captured:
+            db.logger.info("Starting rollback test")
+
+            with self.assertRaises(sqlite3.IntegrityError):
+                db.mark_version_updated(
+                    "xray",
+                    "v2",
+                    source="test",
+                )
+
+        messages = [
+            record.getMessage()
+            for record in captured.records
+        ]
+
+        self.assertFalse(
+            any("Software version changed:" in message for message in messages)
+        )
+
+

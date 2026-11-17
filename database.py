@@ -1,5 +1,6 @@
 import sqlite3
 import secrets
+import logging
 from contextlib import contextmanager
 from collections.abc import Iterator
 from datetime import datetime, timezone, timedelta
@@ -9,6 +10,7 @@ from pathlib import Path
 
 
 DATABASE_PATH = Path("release-radar.db")
+logger = logging.getLogger(__name__)
 
 
 
@@ -357,6 +359,13 @@ def mark_version_updated(
                 datetime.now(timezone.utc).isoformat(),
                 source,
             ),
+        )
+        logger.info(
+            "Software version changed: software=%s, old=%s, new=%s, source=%s",
+            software_id,
+            old_version,
+            version,
+            source,
         )
 
         return True
