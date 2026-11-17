@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+import sqlite3
 from pathlib import Path
 
 import database as db
@@ -81,3 +82,44 @@ class VersionHistoryTests(unittest.TestCase):
             ).fetchone()[0]
 
         self.assertEqual(count, 1)
+
+    def test_history_failure_rolls_back_version(self):
+        db.initialize_database()
+        db.create_software_state("xray", "v1")
+        db.update_software_check("xray", "v2", "now")
+
+        with db.get_connection() as connection:
+            connection.execute(
+                """
+                CREATE TRIGGER reject_version_history
+                BEFORE INSERT ON version_change_history
+                BEGIN
+                    SELECT RAISE(ABORT, 'History write failed');
+                END
+                """
+            )
+
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.mark_version_updated(
+                "xray",
+                "v2",
+                source="test",
+            )
+
+        with db.get_connection() as connection:
+            state = connection.execute(
+                """
+                SELECT current_version
+                FROM software_state
+                WHERE software_id = ?
+                """,
+                ("xray",),
+            ).fetchone()
+
+            history_count = connection.execute(
+                "SELECT COUNT(*) FROM version_change_history"
+            ).fetchone()[0]
+
+        self.assertEqual(state["current_version"], "v1")
+        self.assertEqual(history_count, 0)
+

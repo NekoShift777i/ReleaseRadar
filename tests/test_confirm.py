@@ -138,7 +138,11 @@ class ConfirmHandlerTests(unittest.IsolatedAsyncioTestCase):
             await handle_confirm_apply(update, context)
             await handle_confirm_apply(update, context)
 
-        mark_updated.assert_called_once_with("xray", "v2.0")
+        mark_updated.assert_called_once_with(
+            "xray",
+            "v2.0",
+            source="telegram_confirm",
+        )
         self.assertNotIn(token, requests)
 
         self.assertEqual(query.answer.await_count, 2)

@@ -621,11 +621,15 @@ class ButtonTests(unittest.IsolatedAsyncioTestCase):
                         db.get_software_state("xray")["current_version"],
                         "v2",
                     )
-                    mark_updated.assert_called_once_with("xray", "v2")
+                    mark_updated.assert_called_once_with(
+                        "xray",
+                        "v2",
+                        source="telegram_notification",
+                    )
                     edit_message.assert_awaited_once_with(
-                    query,
-                    reply_markup=None,
-                )
+                        query,
+                        reply_markup=None,
+                    )
 
 
 if __name__ == "__main__":

@@ -309,6 +309,8 @@ def mark_version_updated(
 ) -> bool:
     """Подтвердить версию и сохранить историю изменения."""
     with get_connection() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+
         state = connection.execute(
             """
             SELECT current_version

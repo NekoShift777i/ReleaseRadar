@@ -501,7 +501,11 @@ async def handle_confirm_apply(
         )
         return
 
-    if not mark_version_updated(software_id, version):
+    if not mark_version_updated(
+    software_id,
+    version,
+    source="telegram_confirm",
+    ):
         await query.answer(
             "Не удалось подтвердить установку.",
             show_alert=True,
@@ -578,7 +582,11 @@ async def handle_version_updated(
             # Legacy buttons have no version and cannot be confirmed safely.
             answer = "Эта кнопка устарела. Используйте новое уведомление."
             show_alert = True
-        elif mark_version_updated(button["software_id"], button["version"]):
+        elif mark_version_updated(
+            button["software_id"],
+            button["version"],
+            source="telegram_notification",
+        ):
             logger.info(
                 "%s marked as updated: %s", button["software_id"], button["version"]
             )
