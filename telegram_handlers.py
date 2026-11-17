@@ -545,6 +545,17 @@ async def handle_confirm_apply(
             else None
         ),
     ):
+        logger.warning(
+            "Manual confirmation rejected: "
+            "reason=database_update_rejected, "
+            "software=%s, version=%s, actor_id=%s",
+            software_id,
+            version,
+            update.effective_user.id
+            if update.effective_user is not None
+            else None,
+        )
+
         await query.answer(
             "Не удалось подтвердить установку.",
             show_alert=True,

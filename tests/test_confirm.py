@@ -506,3 +506,83 @@ class ConfirmHandlerTests(unittest.IsolatedAsyncioTestCase):
                 for message in captured_logs.output
             )
         )
+
+    async def test_database_update_rejected_is_logged(self):
+        token = "d" * 32
+
+        query = SimpleNamespace(
+            data=f"confirm_apply:v1:{token}",
+            answer=AsyncMock(),
+        )
+
+        update = SimpleNamespace(
+            callback_query=query,
+            effective_user=SimpleNamespace(id=123456789),
+        )
+
+        requests = {
+            token: {
+                "software_id": "xray",
+                "version": "v2.0",
+                "created_at": time.time(),
+            }
+        }
+
+        context = SimpleNamespace(
+            user_data={"confirm_requests": requests},
+            bot_data={
+                "config": {
+                    "software": [
+                        {
+                            "id": "xray",
+                            "name": "Xray",
+                            "enabled": True,
+                        }
+                    ]
+                }
+            },
+        )
+
+        with (
+            patch("telegram_handlers.is_authorized", return_value=True),
+            patch(
+                "telegram_handlers.get_software_state",
+                return_value={
+                    "current_version": "v1.0",
+                    "latest_version": "v2.0",
+                },
+            ),
+            patch(
+                "telegram_handlers.mark_version_updated",
+                return_value=False,
+            ) as mark_updated,
+            self.assertLogs(
+                "telegram_handlers",
+                level="WARNING",
+            ) as captured_logs,
+        ):
+            await handle_confirm_apply(update, context)
+
+        mark_updated.assert_called_once_with(
+            "xray",
+            "v2.0",
+            source="telegram_confirm",
+            actor_id=123456789,
+        )
+
+        self.assertIn(token, requests)
+
+        query.answer.assert_awaited_once_with(
+            "Не удалось подтвердить установку.",
+            show_alert=True,
+        )
+
+        self.assertTrue(
+            any(
+                "reason=database_update_rejected" in message
+                and "software=xray" in message
+                and "version=v2.0" in message
+                and "actor_id=123456789" in message
+                for message in captured_logs.output
+            )
+        )
