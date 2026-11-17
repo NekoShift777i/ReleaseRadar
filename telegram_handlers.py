@@ -447,6 +447,13 @@ async def handle_confirm_apply(
     request = requests.get(token)
 
     if request is None:
+        logger.info(
+            "Manual confirmation rejected: reason=request_not_found, actor_id=%s",
+            update.effective_user.id
+            if update.effective_user is not None
+            else None,
+        )
+
         await query.answer(
             "Подтверждение недействительно. Откройте /confirm заново.",
             show_alert=True,
@@ -455,6 +462,15 @@ async def handle_confirm_apply(
 
     if time.time() - request["created_at"] >= CONFIRM_REQUEST_TTL:
         requests.pop(token, None)
+        logger.info(
+            "Manual confirmation rejected: ",
+            "reason=request_expired, software=%s, version=%s, actor_id=%s",
+            request["software_id"],
+            request["version"],
+            update.effective_user.id
+            if update.effective_user is not None
+            else None,
+        )
 
         await query.answer(
             "Срок подтверждения истёк. Откройте /confirm заново.",

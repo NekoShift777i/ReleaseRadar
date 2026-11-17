@@ -56,7 +56,10 @@ class ConfirmHandlerTests(unittest.IsolatedAsyncioTestCase):
             answer=AsyncMock(),
         )
 
-        update = SimpleNamespace(callback_query=query)
+        update = SimpleNamespace(
+            callback_query=query,
+            effective_user=SimpleNamespace(id=123456789),
+        )
 
         requests = {
             token: {
