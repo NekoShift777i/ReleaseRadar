@@ -520,6 +520,15 @@ async def handle_confirm_apply(
 
     if state["current_version"] == version:
         requests.pop(token, None)
+        logger.info(
+            "Manual confirmation rejected: "
+            "reason=ready_installed, software=%s, version=%s, actor_id=%s",
+            software_id,
+            version,
+            update.effective_user.id
+            if update.effective_user is not None
+            else None,
+        )
         await query.answer(
             "Эта версия уже установлена.",
             show_alert=True,
