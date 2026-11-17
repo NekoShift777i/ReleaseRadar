@@ -370,3 +370,71 @@ class ConfirmHandlerTests(unittest.IsolatedAsyncioTestCase):
                 for message in captured_logs.output
             )
         )
+
+    async def test_version_mismatch_is_logged(self):
+        token = "e" * 32
+
+        query = SimpleNamespace(
+            data=f"confirm_apply:v1:{token}",
+            answer=AsyncMock(),
+        )
+
+        update = SimpleNamespace(
+            callback_query=query,
+            effective_user=SimpleNamespace(id=123456789),
+        )
+
+        requests = {
+            token: {
+                "software_id": "xray",
+                "version": "v2.0",
+                "created_at": time.time(),
+            }
+        }
+
+        context = SimpleNamespace(
+            user_data={"confirm_requests": requests},
+            bot_data={
+                "config": {
+                    "software": [
+                        {
+                            "id": "xray",
+                            "name": "Xray",
+                            "enabled": True,
+                        }
+                    ]
+                }
+            },
+        )
+
+        with (
+            patch("telegram_handlers.is_authorized", return_value=True),
+            patch(
+                "telegram_handlers.get_software_state",
+                return_value={
+                    "current_version": "v1.0",
+                    "latest_version": "v3.0",
+                },
+            ),
+            patch("telegram_handlers.mark_version_updated") as mark_updated,
+            self.assertLogs("telegram_handlers", level="INFO") as captured_logs,
+        ):
+            await handle_confirm_apply(update, context)
+
+        mark_updated.assert_not_called()
+        self.assertNotIn(token, requests)
+
+        query.answer.assert_awaited_once_with(
+            "Обнаруженная версия изменилась. Откройте /confirm заново.",
+            show_alert=True,
+        )
+
+        self.assertTrue(
+            any(
+                "reason=version_mismatch" in message
+                and "software=xray" in message
+                and "version=v2.0" in message
+                and "actor_id=123456789" in message
+                for message in captured_logs.output
+            )
+        )

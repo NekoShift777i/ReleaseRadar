@@ -503,6 +503,15 @@ async def handle_confirm_apply(
 
     if state is None or state["latest_version"] != version:
         requests.pop(token, None)
+        logger.info(
+            "Manual confirmation rejected: "
+            "reason=version_mismatch, software=%s, version=%s, actor_id=%s",
+            software_id,
+            version,
+            update.effective_user.id
+            if update.effective_user is not None
+            else None,
+        )
         await query.answer(
             "Обнаруженная версия изменилась. Откройте /confirm заново.",
             show_alert=True,
