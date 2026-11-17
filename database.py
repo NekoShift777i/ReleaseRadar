@@ -253,11 +253,11 @@ def create_software_state(
                 current_version,
             ),
         )
-        logger.info(
-            "Software state created: software=%s, current_version=%s",
-            software_id,
-            current_version,
-        )
+    logger.info(
+        "Software state created: software=%s, current_version=%s",
+        software_id,
+        current_version,
+    )
 
 
 
@@ -365,15 +365,15 @@ def mark_version_updated(
                 source,
             ),
         )
-        logger.info(
-            "Software version changed: software=%s, old=%s, new=%s, source=%s",
-            software_id,
-            old_version,
-            version,
-            source,
-        )
+    logger.info(
+        "Software version changed: software=%s, old=%s, new=%s, source=%s",
+        software_id,
+        old_version,
+        version,
+        source,
+    )
 
-        return True
+    return True
 
 
 
