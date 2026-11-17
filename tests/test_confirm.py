@@ -93,7 +93,10 @@ class ConfirmHandlerTests(unittest.IsolatedAsyncioTestCase):
             answer=AsyncMock(),
         )
 
-        update = SimpleNamespace(callback_query=query)
+        update = SimpleNamespace(
+            callback_query=query,
+            effective_user=SimpleNamespace(id=123456789),
+        )
 
         requests = {
             token: {
@@ -143,6 +146,7 @@ class ConfirmHandlerTests(unittest.IsolatedAsyncioTestCase):
             "xray",
             "v2.0",
             source="telegram_confirm",
+            actor_id=123456789,
         )
         self.assertNotIn(token, requests)
 
@@ -263,7 +267,10 @@ class ConfirmHandlerTests(unittest.IsolatedAsyncioTestCase):
                 side_effect=BadRequest("Query is too old")
             ),
         )
-        update = SimpleNamespace(callback_query=query)
+        update = SimpleNamespace(
+            callback_query=query,
+            effective_user=SimpleNamespace(id=123456789),
+        )
 
         requests = {
             token: {
@@ -316,6 +323,7 @@ class ConfirmHandlerTests(unittest.IsolatedAsyncioTestCase):
             "xray",
             "v2.0",
             source="telegram_confirm",
+            actor_id=123456789,
         )
         edit_message.assert_awaited_once()
         self.assertNotIn(token, requests)

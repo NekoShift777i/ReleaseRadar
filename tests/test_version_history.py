@@ -225,3 +225,82 @@ class VersionHistoryTests(unittest.TestCase):
         self.assertIsNotNone(row)
         self.assertEqual(row["source"], "telegram_confirm")
         self.assertEqual(row["actor_id"], 123456789)
+
+    def test_existing_history_table_migrates_actor_id(self):
+        with db.get_connection() as connection:
+            connection.execute(
+                """
+                CREATE TABLE version_change_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    software_id TEXT NOT NULL,
+                    old_version TEXT,
+                    new_version TEXT NOT NULL,
+                    changed_at TEXT NOT NULL,
+                    source TEXT NOT NULL
+                )
+                """
+            )
+            connection.execute(
+                """
+                INSERT INTO version_change_history (
+                    software_id,
+                    old_version,
+                    new_version,
+                    changed_at,
+                    source
+                )
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    "nextcloud",
+                    "v35.0.2",
+                    "v35.0.3",
+                    "2026-11-12T12:00:00+00:00",
+                    "unknown",
+                ),
+            )
+
+        db.initialize_database()
+        db.initialize_database()
+
+        with db.get_connection() as connection:
+            row = connection.execute(
+                """
+                SELECT old_version, new_version, actor_id
+                FROM version_change_history
+                WHERE software_id = ?
+                """,
+                ("nextcloud",),
+            ).fetchone()
+
+        self.assertIsNotNone(row)
+        self.assertEqual(row["old_version"], "v35.0.2")
+        self.assertEqual(row["new_version"], "v35.0.3")
+        self.assertIsNone(row["actor_id"])
+
+    def test_confirmation_history_without_actor_id(self):
+        db.initialize_database()
+        db.create_software_state("xray", "v1")
+        db.update_software_check("xray", "v2", "now")
+
+        result = db.mark_version_updated(
+            "xray",
+            "v2",
+            source="unknown",
+        )
+
+        self.assertTrue(result)
+
+        with db.get_connection() as connection:
+            row = connection.execute(
+                """
+                SELECT source, actor_id
+                FROM version_change_history
+                WHERE software_id = ?
+                """,
+                ("xray",),
+            ).fetchone()
+
+        self.assertIsNotNone(row)
+        self.assertEqual(row["source"], "unknown")
+        self.assertIsNone(row["actor_id"])

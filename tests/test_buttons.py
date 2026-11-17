@@ -625,6 +625,7 @@ class ButtonTests(unittest.IsolatedAsyncioTestCase):
                         "xray",
                         "v2",
                         source="telegram_notification",
+                        actor_id=12345
                     )
                     edit_message.assert_awaited_once_with(
                         query,

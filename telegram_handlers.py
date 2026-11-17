@@ -502,9 +502,14 @@ async def handle_confirm_apply(
         return
 
     if not mark_version_updated(
-    software_id,
-    version,
-    source="telegram_confirm",
+        software_id,
+        version,
+        source="telegram_confirm",
+        actor_id=(
+            update.effective_user.id
+            if update.effective_user is not None
+            else None
+        ),
     ):
         await query.answer(
             "Не удалось подтвердить установку.",
@@ -592,6 +597,11 @@ async def handle_version_updated(
             button["software_id"],
             button["version"],
             source="telegram_notification",
+            actor_id=(
+                update.effective_user.id
+                if update.effective_user is not None
+                else None
+            ),
         ):
             logger.info(
                 "%s marked as updated: %s", button["software_id"], button["version"]
