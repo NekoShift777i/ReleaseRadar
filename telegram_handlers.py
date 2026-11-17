@@ -463,7 +463,7 @@ async def handle_confirm_apply(
     if time.time() - request["created_at"] >= CONFIRM_REQUEST_TTL:
         requests.pop(token, None)
         logger.info(
-            "Manual confirmation rejected: ",
+            "Manual confirmation rejected: "
             "reason=request_expired, software=%s, version=%s, actor_id=%s",
             request["software_id"],
             request["version"],

@@ -76,6 +76,7 @@ class ConfirmHandlerTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch("telegram_handlers.is_authorized", return_value=True),
             patch("telegram_handlers.mark_version_updated") as mark_updated,
+            self.assertLogs("telegram_handlers", level="INFO") as captured_logs,
         ):
             await handle_confirm_apply(update, context)
 
@@ -330,3 +331,42 @@ class ConfirmHandlerTests(unittest.IsolatedAsyncioTestCase):
         )
         edit_message.assert_awaited_once()
         self.assertNotIn(token, requests)
+
+    async def test_missing_confirmation_is_logged(self):
+        token = "f" * 32
+
+        query = SimpleNamespace(
+            data=f"confirm_apply:v1:{token}",
+            answer=AsyncMock(),
+        )
+
+        update = SimpleNamespace(
+            callback_query=query,
+            effective_user=SimpleNamespace(id=123456789),
+        )
+
+        context = SimpleNamespace(
+            user_data={"confirm_requests": {}},
+        )
+
+        with (
+            patch("telegram_handlers.is_authorized", return_value=True),
+            patch("telegram_handlers.mark_version_updated") as mark_updated,
+            self.assertLogs("telegram_handlers", level="INFO") as captured_logs,
+        ):
+            await handle_confirm_apply(update, context)
+
+        mark_updated.assert_not_called()
+
+        query.answer.assert_awaited_once_with(
+            "Подтверждение недействительно. Откройте /confirm заново.",
+            show_alert=True,
+        )
+
+        self.assertTrue(
+            any(
+                "reason=request_not_found" in message
+                and "actor_id=123456789" in message
+                for message in captured_logs.output
+            )
+        )
