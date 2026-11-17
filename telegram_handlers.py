@@ -522,7 +522,7 @@ async def handle_confirm_apply(
         requests.pop(token, None)
         logger.info(
             "Manual confirmation rejected: "
-            "reason=ready_installed, software=%s, version=%s, actor_id=%s",
+            "reason=already_installed, software=%s, version=%s, actor_id=%s",
             software_id,
             version,
             update.effective_user.id
