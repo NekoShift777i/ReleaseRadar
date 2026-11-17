@@ -36,6 +36,7 @@ class VersionHistoryTests(unittest.TestCase):
                 "new_version",
                 "changed_at",
                 "source",
+                "actor_id",
             },
         )
 
@@ -196,3 +197,31 @@ class VersionHistoryTests(unittest.TestCase):
             ).fetchone()[0]
 
         self.assertEqual(history_count, 0)
+
+    def test_confirmation_history_stores_actor_id(self):
+        db.initialize_database()
+        db.create_software_state("xray", "v1")
+        db.update_software_check("xray", "v2", "now")
+
+        result = db.mark_version_updated(
+            "xray",
+            "v2",
+            source="telegram_confirm",
+            actor_id=123456789,
+        )
+
+        self.assertTrue(result)
+
+        with db.get_connection() as connection:
+            row = connection.execute(
+                """
+                SELECT source, actor_id
+                FROM version_change_history
+                WHERE software_id = ?
+                """,
+                ("xray",),
+            ).fetchone()
+
+        self.assertIsNotNone(row)
+        self.assertEqual(row["source"], "telegram_confirm")
+        self.assertEqual(row["actor_id"], 123456789)

@@ -173,10 +173,25 @@ def initialize_database() -> None:
                 old_version TEXT,
                 new_version TEXT NOT NULL,
                 changed_at TEXT NOT NULL,
-                source TEXT NOT NULL
+                source TEXT NOT NULL,
+                actor_id INTEGER
             )
             """
         )
+        history_columns = {
+            row["name"]
+            for row in connection.execute(
+                "PRAGMA table_info(version_change_history)"
+            )
+        }
+
+        if "actor_id" not in history_columns:
+            connection.execute(
+                """
+                ALTER TABLE version_change_history
+                ADD COLUMN actor_id INTEGER
+                """
+            )
 
         button_columns = {
             row["name"]
@@ -313,6 +328,7 @@ def mark_version_updated(
     software_id: str,
     version: str,
     source: str = "unknown",
+    actor_id: int | None = None,
 ) -> bool:
     """Подтвердить версию и сохранить историю изменения."""
     with get_connection() as connection:
@@ -353,9 +369,10 @@ def mark_version_updated(
                 old_version,
                 new_version,
                 changed_at,
-                source
+                source,
+                actor_id
             )
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
                 software_id,
@@ -363,6 +380,7 @@ def mark_version_updated(
                 version,
                 datetime.now(timezone.utc).isoformat(),
                 source,
+                actor_id,
             ),
         )
     logger.info(
