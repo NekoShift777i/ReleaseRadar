@@ -5,6 +5,7 @@ from pathlib import Path
 import time
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
+from telegram.error import BadRequest
 
 from telegram_handlers import handle_confirm_apply, handle_confirm_selection, CONFIRM_REQUEST_TTL
 
@@ -252,3 +253,69 @@ class ConfirmHandlerTests(unittest.IsolatedAsyncioTestCase):
             "Подтверждение отменено."
         )
         edit_message.assert_awaited_once()
+
+    async def test_answer_failure_after_manual_confirmation(self):
+        token = "e" * 32
+
+        query = SimpleNamespace(
+            data=f"confirm_apply:v1:{token}",
+            answer=AsyncMock(
+                side_effect=BadRequest("Query is too old")
+            ),
+        )
+        update = SimpleNamespace(callback_query=query)
+
+        requests = {
+            token: {
+                "software_id": "xray",
+                "version": "v2.0",
+                "created_at": time.time(),
+            }
+        }
+
+        context = SimpleNamespace(
+            user_data={"confirm_requests": requests},
+            bot_data={
+                "config": {
+                    "software": [
+                        {
+                            "id": "xray",
+                            "name": "Xray",
+                            "enabled": True,
+                        }
+                    ]
+                }
+            },
+        )
+
+        with (
+            patch(
+                "telegram_handlers.is_authorized",
+                return_value=True,
+            ),
+            patch(
+                "telegram_handlers.get_software_state",
+                return_value={
+                    "current_version": "v1.0",
+                    "latest_version": "v2.0",
+                },
+            ),
+            patch(
+                "telegram_handlers.mark_version_updated",
+                return_value=True,
+            ) as mark_updated,
+            patch(
+                "telegram_handlers.edit_callback_message",
+                new_callable=AsyncMock,
+            ) as edit_message,
+            self.assertLogs("telegram_handlers", level="WARNING"),
+        ):
+            await handle_confirm_apply(update, context)
+
+        mark_updated.assert_called_once_with(
+            "xray",
+            "v2.0",
+            source="telegram_confirm",
+        )
+        edit_message.assert_awaited_once()
+        self.assertNotIn(token, requests)

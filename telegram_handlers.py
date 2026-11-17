@@ -514,7 +514,13 @@ async def handle_confirm_apply(
 
     requests.pop(token, None)
 
-    await query.answer("Версия отмечена установленной.")
+    try:
+        await query.answer("Версия отмечена установленной.")
+    except TelegramError:
+        logger.warning(
+            "Failed to answer manual version confirmation callback",
+            exc_info=True,
+        )
 
     await edit_callback_message(
         query,
