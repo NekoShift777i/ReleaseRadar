@@ -6,11 +6,15 @@ existing imports and test patches.
 
 import re
 import sys
+import logging
 
-from telegram import Update
+from telegram import Bot, Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
+from database import create_notification_button
+from update_logic import UpdateResult
 
+logger = logging.getLogger("telegram_notifier")
 _parent = sys.modules[__package__]
 
 
@@ -88,3 +92,48 @@ async def handle_version_updated(
         )
 
     await _parent.edit_callback_message(query, reply_markup=None)
+
+
+async def send_update_notification(
+        bot: Bot,
+        chat_id: int,
+        result: UpdateResult,
+) -> None:
+    token = create_notification_button(result.software_id, result.latest_version)
+
+    keyboard = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    "✅ Версия обновлена",
+                    callback_data=f"version_updated:v1:{token}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "⏭️ Пропустить версию",
+                    callback_data=f"version_skip:v1:{token}",
+                )
+            ],
+        ]
+    )
+
+
+    message = (
+        f"🔔 Доступно обновление {result.software_name}\n\n"
+        f"Текущая версия: {result.current_version}\n"
+        f"Новая версия: {result.latest_version}\n\n"
+        f"{result.release_url}"
+    )
+
+    await bot.send_message(
+        chat_id=chat_id,
+        text=message,
+        reply_markup=keyboard,
+    )
+
+    logger.info(
+        "Update notification sent for %s: %s",
+        result.software_name,
+        result.latest_version,
+    )

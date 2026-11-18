@@ -10,7 +10,7 @@ from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 from check_locks import SoftwareCheckLocks
 from message_editing import edit_callback_message
-from telegram_notifier import send_update_notification
+from telegram_handlers.notifications import send_update_notification
 from update_logic import UpdateResult
 
 logger = logging.getLogger(__name__)

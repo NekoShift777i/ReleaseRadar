@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 import database as db
 from telegram.error import BadRequest
 from telegram_handlers import handle_version_updated, is_authorized, handle_version_skip, handle_version_skip_cancel
-from telegram_notifier import send_update_notification
+from telegram_handlers.notifications import send_update_notification
 from update_logic import UpdateResult
 
 

@@ -5,7 +5,7 @@ from config_validation import ConfigError, parse_notification_button_retention
 from datetime import datetime, timezone
 from update_logic import should_notify, is_newer_version, UpdateResult
 from notifications import get_pending_notifications
-from telegram_notifier import send_update_notification
+from telegram_handlers.notifications import send_update_notification
 from telegram import BotCommand
 from telegram.error import NetworkError
 from telegram.ext import (
