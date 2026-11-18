@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from update_logic import should_notify, is_newer_version, UpdateResult
 from notifications import get_pending_notifications
 from telegram_handlers.notifications import send_update_notification
+from telegram_handlers.command_logging import log_telegram_command
 from telegram import BotCommand
 from telegram.error import NetworkError
 from telegram.ext import (
@@ -285,15 +286,6 @@ def main() -> None:
             BotCommand("confirm", "Подтвердить установку обновления"),
             BotCommand("skipped", "Показать список пропусков версий")
         ])
-        registered_commands = await application.bot.get_my_commands()
-
-        logging.getLogger(__name__).info(
-            "Telegram registered commands: %s",
-            [
-                f"/{cmd.command}: {cmd.description}"
-                for cmd in registered_commands
-            ],
-        )
         stop_event = asyncio.Event()
         shutdown.bind(stop_event)
         if shutdown.worker_stop.is_set():
@@ -378,6 +370,9 @@ def main() -> None:
     application.bot_data["config"] = config
     application.bot_data["telegram_chat_id"] = telegram_chat_id
     application.add_error_handler(handle_telegram_error)
+    application.add_handler(
+        MessageHandler(filters.COMMAND, log_telegram_command), group=-1
+    )
     application.add_handler(CommandHandler("start", handle_start))
     application.add_handler(CommandHandler("status", handle_status))
     application.add_handler(CommandHandler("check", handle_check))

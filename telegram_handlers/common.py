@@ -10,12 +10,6 @@ def is_authorized(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     user = update.effective_user
     chat = update.effective_chat
     allowed_id = context.bot_data.get("telegram_chat_id")
-    logger.info(
-    "Telegram authorization: user_id=%s, chat_id=%s, allowed_id=%s",
-        update.effective_user.id if update.effective_user else None,
-        update.effective_chat.id if update.effective_chat else None,
-        allowed_id,
-    )
     return (
         user is not None
         and chat is not None
