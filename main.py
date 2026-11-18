@@ -18,6 +18,7 @@ from telegram.ext import (
 from telegram_handlers import (
     handle_version_updated,
     handle_status,
+    handle_start,
     handle_check,
     handle_pending,
     handle_check_selection,
@@ -277,12 +278,22 @@ def main() -> None:
 
     async def post_init(application: Application) -> None:
         await application.bot.set_my_commands([
+            BotCommand("start", "Начало работы и список команд"),
             BotCommand("status", "Состояние отслеживаемых программ"),
             BotCommand("check", "Проверить наличие обновлений"),
             BotCommand("pending", "Повторить неподтверждённые уведомления"),
             BotCommand("confirm", "Подтвердить установку обновления"),
             BotCommand("skipped", "Показать список пропусков версий")
         ])
+        registered_commands = await application.bot.get_my_commands()
+
+        logging.getLogger(__name__).info(
+            "Telegram registered commands: %s",
+            [
+                f"/{cmd.command}: {cmd.description}"
+                for cmd in registered_commands
+            ],
+        )
         stop_event = asyncio.Event()
         shutdown.bind(stop_event)
         if shutdown.worker_stop.is_set():
@@ -367,6 +378,7 @@ def main() -> None:
     application.bot_data["config"] = config
     application.bot_data["telegram_chat_id"] = telegram_chat_id
     application.add_error_handler(handle_telegram_error)
+    application.add_handler(CommandHandler("start", handle_start))
     application.add_handler(CommandHandler("status", handle_status))
     application.add_handler(CommandHandler("check", handle_check))
     application.add_handler(CommandHandler("pending", handle_pending))

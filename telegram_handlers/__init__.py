@@ -28,6 +28,7 @@ from zoneinfo import ZoneInfo
 
 # Compatibility imports are kept for existing callers and test patches.
 from .common import is_authorized as _is_authorized
+from .start import handle_start
 from .status import handle_status
 from . import check as _check
 from . import skipped as _skipped
