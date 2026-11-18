@@ -18,29 +18,21 @@ from database import (
 from providers import get_latest_release
 from telegram_notifier import send_update_notification
 from update_logic import UpdateResult
-from status import get_status_messages
 from check_locks import SoftwareCheckLocks
 from message_editing import edit_callback_message
 from config_validation import parse_notification_button_retention
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from .common import is_authorized as _is_authorized
+from .status import handle_status
+
 logger = logging.getLogger(__name__)
 
 
 def is_authorized(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    """Allow only the configured owner in a private chat."""
-    user = update.effective_user
-    chat = update.effective_chat
-    allowed_id = context.bot_data.get("telegram_chat_id")
-    return (
-        user is not None
-        and chat is not None
-        and chat.type == "private"
-        and allowed_id is not None
-        and user.id == allowed_id
-        and chat.id == allowed_id
-    )
+    """Compatibility entry point for authorization checks and test patches."""
+    return _is_authorized(update, context)
 
 
 CHECK_PAGE_SIZE = 8
@@ -582,26 +574,6 @@ async def handle_confirm_apply(
         reply_markup=None,
         edit_text=True,
     )
-
-
-async def handle_status(
-        update: Update,
-        context: ContextTypes.DEFAULT_TYPE,
-) -> None:
-    message = update.effective_message
-    chat = update.effective_chat
-    if message is None or not is_authorized(update, context):
-        return
-    try:
-        messages = await asyncio.to_thread(get_status_messages, context.bot_data["config"])
-    except Exception:
-        logger.exception("Failed to read status")
-        messages = ["Не удалось получить состояние программ. Попробуйте ещё раз."]
-    try:
-        for text in messages:
-            await message.reply_text(text, parse_mode=None)
-    except TelegramError:
-        logger.warning("Failed to send status", exc_info=True)
 
 
 async def handle_version_updated(
