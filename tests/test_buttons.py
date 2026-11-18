@@ -201,6 +201,57 @@ class ButtonTests(unittest.IsolatedAsyncioTestCase):
         )
 
     
+    def assert_no_version_changes(self):
+        self.assertEqual(db.get_software_state("xray")["current_version"], "v1")
+        with db.get_connection() as connection:
+            count = connection.execute(
+                "SELECT COUNT(*) FROM version_change_history"
+            ).fetchone()[0]
+        self.assertEqual(count, 0)
+
+    async def test_stale_button_removes_markup_without_changing_history(self):
+        data = self.button("v2")
+        db.update_software_check("xray", "v3", "later")
+
+        query = await self.press(data)
+
+        self.assert_no_version_changes()
+        query.answer.assert_awaited_once_with(
+            "Версия уже отмечена или уведомление устарело. База не изменена.",
+            show_alert=True,
+        )
+        query.edit_message_reply_markup.assert_awaited_once_with(reply_markup=None)
+
+    async def test_unknown_button_removes_markup_without_changing_history(self):
+        query = await self.press("version_updated:v1:" + "0" * 32)
+
+        self.assert_no_version_changes()
+        query.answer.assert_awaited_once_with(
+            "Эта кнопка устарела. Используйте новое уведомление.",
+            show_alert=True,
+        )
+        query.edit_message_reply_markup.assert_awaited_once_with(reply_markup=None)
+
+    async def test_duplicate_button_keeps_single_history_entry(self):
+        data = self.button()
+        first = await self.press(data)
+        second = await self.press(data)
+
+        self.assertEqual(db.get_software_state("xray")["current_version"], "v2")
+        with db.get_connection() as connection:
+            rows = connection.execute(
+                "SELECT old_version, new_version, source, actor_id "
+                "FROM version_change_history"
+            ).fetchall()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(tuple(rows[0]), ("v1", "v2", "telegram_notification", 12345))
+        first.edit_message_reply_markup.assert_awaited_once_with(reply_markup=None)
+        second.edit_message_reply_markup.assert_awaited_once_with(reply_markup=None)
+        second.answer.assert_awaited_once_with(
+            "Версия уже отмечена или уведомление устарело. База не изменена.",
+            show_alert=True,
+        )
+
     async def test_database_error_does_not_confirm_update(self):
         data = self.button()
 
