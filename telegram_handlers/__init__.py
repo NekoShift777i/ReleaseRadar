@@ -29,6 +29,7 @@ from .status import handle_status
 from . import check as _check
 from . import skipped as _skipped
 from . import confirm as _confirm
+from . import notifications as _notifications
 
 logger = logging.getLogger(__name__)
 
@@ -89,80 +90,10 @@ async def handle_confirm_apply(
 
 
 async def handle_version_updated(
-        update: Update,
-        context: ContextTypes.DEFAULT_TYPE,
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
 ) -> None:
-    query = update.callback_query
-    if query is None:
-        return
-    if not is_authorized(update, context):
-        await query.answer("Доступ запрещён.", show_alert=True)
-        return
-    if not isinstance(query.data, str):
-        await query.answer("Недействительная кнопка.", show_alert=True)
-        return
-    if not query.data.startswith("version_updated:"):
-        await query.answer()
-        return
-
-    match = re.fullmatch(r"version_updated:v1:([0-9a-f]{32})", query.data)
-    try:
-        retention = parse_notification_button_retention(
-            context.bot_data["config"].get(
-                "notification_button_retention", "30d"
-            )
-        )
-
-        button = (
-            get_valid_notification_button(match.group(1), retention)
-            if match
-            else None
-        )
-        if button is None:
-            # Legacy buttons have no version and cannot be confirmed safely.
-            answer = "Эта кнопка устарела. Используйте новое уведомление."
-            show_alert = True
-        elif mark_version_updated(
-            button["software_id"],
-            button["version"],
-            source="telegram_notification",
-            actor_id=(
-                update.effective_user.id
-                if update.effective_user is not None
-                else None
-            ),
-        ):
-            logger.info(
-                "%s marked as updated: %s", button["software_id"], button["version"]
-            )
-            pending = context.user_data.get("pending_version_skip")
-
-            if (
-                pending is not None
-                and pending["software_id"] == button["software_id"]
-                and pending["version"] == button["version"]
-            ):
-                context.user_data.pop("pending_version_skip", None)
-            answer = "Версия отмечена как обновлённая"
-            show_alert = False
-        else:
-            answer = "Версия уже отмечена или уведомление устарело. База не изменена."
-            show_alert = True
-    except Exception:
-        logger.exception("Failed to confirm release")
-        await query.answer("Не удалось обновить базу. Попробуйте ещё раз.", show_alert=True)
-        return
-
-    try:
-        await query.answer(answer, show_alert=show_alert)
-    except TelegramError:
-        logger.warning(
-            "Failed to answer version confirmation callback",
-            exc_info=True,
-        )
-
-    await edit_callback_message(query, reply_markup=None)
-
+    await _notifications.handle_version_updated(update, context)
 
 
 async def handle_version_skip(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
