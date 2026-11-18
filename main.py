@@ -260,6 +260,15 @@ async def handle_telegram_error(update, context) -> None:
         ) if error is not None else None,
     )
 
+async def debug_incoming(update, context):
+    message = update.effective_message
+    logger.info(
+        "Telegram incoming: user_id=%s | chat_id=%s | text=%r",
+        update.effective_user.id if update.effective_user else None,
+        update.effective_chat.id if update.effective_chat else None,
+        message.text if message else None,
+    )
+
 
 def main() -> None:
     setup_logging()
