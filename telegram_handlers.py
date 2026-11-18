@@ -962,10 +962,6 @@ def get_pending_release(software: dict, locks: SoftwareCheckLocks):
             return None
         release = get_latest_release(software)
         state = get_software_state(software["id"])
-        if (state is None or state["latest_version"] is None
-                or state["current_version"] == state["latest_version"]
-                or state["latest_version"] != release.version):
-            return None
         if (
             state is None
             or state["latest_version"] is None

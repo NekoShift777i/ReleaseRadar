@@ -277,12 +277,11 @@ def main() -> None:
 
     async def post_init(application: Application) -> None:
         await application.bot.set_my_commands([
-            BotCommand("start", "запустить бота"),
             BotCommand("status", "Состояние отслеживаемых программ"),
             BotCommand("check", "Проверить наличие обновлений"),
             BotCommand("pending", "Повторить неподтверждённые уведомления"),
             BotCommand("confirm", "Подтвердить установку обновления"),
-            BotCommand("skipped", "Покаазать список пропусков версий")
+            BotCommand("skipped", "Показать список пропусков версий")
         ])
         stop_event = asyncio.Event()
         shutdown.bind(stop_event)
