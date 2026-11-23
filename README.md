@@ -60,12 +60,24 @@ python3 --version
 
 ## Get the source code
 
-Clone the ReleaseRadar repository:
+You can obtain the ReleaseRadar source code in two ways.
+
+### Using Git
+
+Clone the repository:
 
 ```bash
 git clone https://github.com/NekoShift777i/ReleaseRadar.git releaseradar
 cd releaseradar
 ```
+
+### Using a release archive
+
+Open the [ReleaseRadar releases page](https://github.com/NekoShift777i/ReleaseRadar/releases) and download the archive for the desired version from the Assets section.
+
+Extract the archive to your preferred directory and navigate to it.
+
+To update an installation created from an archive, replace the application files manually. Preserve your existing configuration and working database.
 
 ## Python virtual environment
 
