@@ -1,5 +1,6 @@
 import sqlite3
 import secrets
+import logging
 from contextlib import contextmanager
 from collections.abc import Iterator
 from datetime import datetime, timezone, timedelta
@@ -9,6 +10,7 @@ from pathlib import Path
 
 
 DATABASE_PATH = Path("release-radar.db")
+logger = logging.getLogger(__name__)
 
 
 
@@ -163,6 +165,34 @@ def initialize_database() -> None:
             """
         )
 
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS version_change_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                software_id TEXT NOT NULL,
+                old_version TEXT,
+                new_version TEXT NOT NULL,
+                changed_at TEXT NOT NULL,
+                source TEXT NOT NULL,
+                actor_id INTEGER
+            )
+            """
+        )
+        history_columns = {
+            row["name"]
+            for row in connection.execute(
+                "PRAGMA table_info(version_change_history)"
+            )
+        }
+
+        if "actor_id" not in history_columns:
+            connection.execute(
+                """
+                ALTER TABLE version_change_history
+                ADD COLUMN actor_id INTEGER
+                """
+            )
+
         button_columns = {
             row["name"]
             for row in connection.execute(
@@ -238,6 +268,11 @@ def create_software_state(
                 current_version,
             ),
         )
+    logger.info(
+        "Software state created: software=%s, current_version=%s",
+        software_id,
+        current_version,
+    )
 
 
 
@@ -289,18 +324,75 @@ def update_software_check(
 
 
 
-def mark_version_updated(software_id: str, version: str) -> bool:
-    """Confirm only the release attached to the button, atomically."""
+def mark_version_updated(
+    software_id: str,
+    version: str,
+    source: str = "unknown",
+    actor_id: int | None = None,
+) -> bool:
+    """Подтвердить версию и сохранить историю изменения."""
     with get_connection() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+
+        state = connection.execute(
+            """
+            SELECT current_version
+            FROM software_state
+            WHERE software_id = ?
+            """,
+            (software_id,),
+        ).fetchone()
+
+        if state is None:
+            return False
+
+        old_version = state["current_version"]
+
         cursor = connection.execute(
             """
             UPDATE software_state
             SET current_version = ?
-            WHERE software_id = ? AND latest_version = ? AND current_version != ?
+            WHERE software_id = ?
+              AND latest_version = ?
+              AND current_version != ?
             """,
             (version, software_id, version, version),
         )
-        return cursor.rowcount == 1
+
+        if cursor.rowcount != 1:
+            return False
+
+        connection.execute(
+            """
+            INSERT INTO version_change_history (
+                software_id,
+                old_version,
+                new_version,
+                changed_at,
+                source,
+                actor_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                software_id,
+                old_version,
+                version,
+                datetime.now(timezone.utc).isoformat(),
+                source,
+                actor_id,
+            ),
+        )
+    logger.info(
+        "Software version changed: software=%s, old=%s, new=%s, source=%s",
+        software_id,
+        old_version,
+        version,
+        source,
+    )
+
+    return True
+
 
 
 def mark_version_notified(

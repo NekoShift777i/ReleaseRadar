@@ -5,6 +5,7 @@ from pathlib import Path
 import time
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
+from telegram.error import BadRequest
 
 from telegram_handlers import handle_confirm_apply, handle_confirm_selection, CONFIRM_REQUEST_TTL
 
@@ -55,7 +56,10 @@ class ConfirmHandlerTests(unittest.IsolatedAsyncioTestCase):
             answer=AsyncMock(),
         )
 
-        update = SimpleNamespace(callback_query=query)
+        update = SimpleNamespace(
+            callback_query=query,
+            effective_user=SimpleNamespace(id=123456789),
+        )
 
         requests = {
             token: {
@@ -72,6 +76,7 @@ class ConfirmHandlerTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch("telegram_handlers.is_authorized", return_value=True),
             patch("telegram_handlers.mark_version_updated") as mark_updated,
+            self.assertLogs("telegram_handlers", level="INFO") as captured_logs,
         ):
             await handle_confirm_apply(update, context)
 
@@ -92,7 +97,10 @@ class ConfirmHandlerTests(unittest.IsolatedAsyncioTestCase):
             answer=AsyncMock(),
         )
 
-        update = SimpleNamespace(callback_query=query)
+        update = SimpleNamespace(
+            callback_query=query,
+            effective_user=SimpleNamespace(id=123456789),
+        )
 
         requests = {
             token: {
@@ -138,7 +146,12 @@ class ConfirmHandlerTests(unittest.IsolatedAsyncioTestCase):
             await handle_confirm_apply(update, context)
             await handle_confirm_apply(update, context)
 
-        mark_updated.assert_called_once_with("xray", "v2.0")
+        mark_updated.assert_called_once_with(
+            "xray",
+            "v2.0",
+            source="telegram_confirm",
+            actor_id=123456789,
+        )
         self.assertNotIn(token, requests)
 
         self.assertEqual(query.answer.await_count, 2)
@@ -248,3 +261,328 @@ class ConfirmHandlerTests(unittest.IsolatedAsyncioTestCase):
             "Подтверждение отменено."
         )
         edit_message.assert_awaited_once()
+
+    async def test_answer_failure_after_manual_confirmation(self):
+        token = "e" * 32
+
+        query = SimpleNamespace(
+            data=f"confirm_apply:v1:{token}",
+            answer=AsyncMock(
+                side_effect=BadRequest("Query is too old")
+            ),
+        )
+        update = SimpleNamespace(
+            callback_query=query,
+            effective_user=SimpleNamespace(id=123456789),
+        )
+
+        requests = {
+            token: {
+                "software_id": "xray",
+                "version": "v2.0",
+                "created_at": time.time(),
+            }
+        }
+
+        context = SimpleNamespace(
+            user_data={"confirm_requests": requests},
+            bot_data={
+                "config": {
+                    "software": [
+                        {
+                            "id": "xray",
+                            "name": "Xray",
+                            "enabled": True,
+                        }
+                    ]
+                }
+            },
+        )
+
+        with (
+            patch(
+                "telegram_handlers.is_authorized",
+                return_value=True,
+            ),
+            patch(
+                "telegram_handlers.get_software_state",
+                return_value={
+                    "current_version": "v1.0",
+                    "latest_version": "v2.0",
+                },
+            ),
+            patch(
+                "telegram_handlers.mark_version_updated",
+                return_value=True,
+            ) as mark_updated,
+            patch(
+                "telegram_handlers.edit_callback_message",
+                new_callable=AsyncMock,
+            ) as edit_message,
+            self.assertLogs("telegram_handlers", level="WARNING"),
+        ):
+            await handle_confirm_apply(update, context)
+
+        mark_updated.assert_called_once_with(
+            "xray",
+            "v2.0",
+            source="telegram_confirm",
+            actor_id=123456789,
+        )
+        edit_message.assert_awaited_once()
+        self.assertNotIn(token, requests)
+
+    async def test_missing_confirmation_is_logged(self):
+        token = "f" * 32
+
+        query = SimpleNamespace(
+            data=f"confirm_apply:v1:{token}",
+            answer=AsyncMock(),
+        )
+
+        update = SimpleNamespace(
+            callback_query=query,
+            effective_user=SimpleNamespace(id=123456789),
+        )
+
+        context = SimpleNamespace(
+            user_data={"confirm_requests": {}},
+        )
+
+        with (
+            patch("telegram_handlers.is_authorized", return_value=True),
+            patch("telegram_handlers.mark_version_updated") as mark_updated,
+            self.assertLogs("telegram_handlers", level="INFO") as captured_logs,
+        ):
+            await handle_confirm_apply(update, context)
+
+        mark_updated.assert_not_called()
+
+        query.answer.assert_awaited_once_with(
+            "Подтверждение недействительно. Откройте /confirm заново.",
+            show_alert=True,
+        )
+
+        self.assertTrue(
+            any(
+                "reason=request_not_found" in message
+                and "actor_id=123456789" in message
+                for message in captured_logs.output
+            )
+        )
+
+    async def test_version_mismatch_is_logged(self):
+        token = "e" * 32
+
+        query = SimpleNamespace(
+            data=f"confirm_apply:v1:{token}",
+            answer=AsyncMock(),
+        )
+
+        update = SimpleNamespace(
+            callback_query=query,
+            effective_user=SimpleNamespace(id=123456789),
+        )
+
+        requests = {
+            token: {
+                "software_id": "xray",
+                "version": "v2.0",
+                "created_at": time.time(),
+            }
+        }
+
+        context = SimpleNamespace(
+            user_data={"confirm_requests": requests},
+            bot_data={
+                "config": {
+                    "software": [
+                        {
+                            "id": "xray",
+                            "name": "Xray",
+                            "enabled": True,
+                        }
+                    ]
+                }
+            },
+        )
+
+        with (
+            patch("telegram_handlers.is_authorized", return_value=True),
+            patch(
+                "telegram_handlers.get_software_state",
+                return_value={
+                    "current_version": "v1.0",
+                    "latest_version": "v3.0",
+                },
+            ),
+            patch("telegram_handlers.mark_version_updated") as mark_updated,
+            self.assertLogs("telegram_handlers", level="INFO") as captured_logs,
+        ):
+            await handle_confirm_apply(update, context)
+
+        mark_updated.assert_not_called()
+        self.assertNotIn(token, requests)
+
+        query.answer.assert_awaited_once_with(
+            "Обнаруженная версия изменилась. Откройте /confirm заново.",
+            show_alert=True,
+        )
+
+        self.assertTrue(
+            any(
+                "reason=version_mismatch" in message
+                and "software=xray" in message
+                and "version=v2.0" in message
+                and "actor_id=123456789" in message
+                for message in captured_logs.output
+            )
+        )
+
+    async def test_already_installed_is_logged(self):
+        token = "a" * 32
+
+        query = SimpleNamespace(
+            data=f"confirm_apply:v1:{token}",
+            answer=AsyncMock(),
+        )
+
+        update = SimpleNamespace(
+            callback_query=query,
+            effective_user=SimpleNamespace(id=123456789),
+        )
+
+        requests = {
+            token: {
+                "software_id": "xray",
+                "version": "v2.0",
+                "created_at": time.time(),
+            }
+        }
+
+        context = SimpleNamespace(
+            user_data={"confirm_requests": requests},
+            bot_data={
+                "config": {
+                    "software": [
+                        {
+                            "id": "xray",
+                            "name": "Xray",
+                            "enabled": True,
+                        }
+                    ]
+                }
+            },
+        )
+
+        with (
+            patch("telegram_handlers.is_authorized", return_value=True),
+            patch(
+                "telegram_handlers.get_software_state",
+                return_value={
+                    "current_version": "v2.0",
+                    "latest_version": "v2.0",
+                },
+            ),
+            patch("telegram_handlers.mark_version_updated") as mark_updated,
+            self.assertLogs("telegram_handlers", level="INFO") as captured_logs,
+        ):
+            await handle_confirm_apply(update, context)
+
+        mark_updated.assert_not_called()
+        self.assertNotIn(token, requests)
+
+        query.answer.assert_awaited_once_with(
+            "Эта версия уже установлена.",
+            show_alert=True,
+        )
+
+        self.assertTrue(
+            any(
+                "reason=already_installed" in message
+                and "software=xray" in message
+                and "version=v2.0" in message
+                and "actor_id=123456789" in message
+                for message in captured_logs.output
+            )
+        )
+
+    async def test_database_update_rejected_is_logged(self):
+        token = "d" * 32
+
+        query = SimpleNamespace(
+            data=f"confirm_apply:v1:{token}",
+            answer=AsyncMock(),
+        )
+
+        update = SimpleNamespace(
+            callback_query=query,
+            effective_user=SimpleNamespace(id=123456789),
+        )
+
+        requests = {
+            token: {
+                "software_id": "xray",
+                "version": "v2.0",
+                "created_at": time.time(),
+            }
+        }
+
+        context = SimpleNamespace(
+            user_data={"confirm_requests": requests},
+            bot_data={
+                "config": {
+                    "software": [
+                        {
+                            "id": "xray",
+                            "name": "Xray",
+                            "enabled": True,
+                        }
+                    ]
+                }
+            },
+        )
+
+        with (
+            patch("telegram_handlers.is_authorized", return_value=True),
+            patch(
+                "telegram_handlers.get_software_state",
+                return_value={
+                    "current_version": "v1.0",
+                    "latest_version": "v2.0",
+                },
+            ),
+            patch(
+                "telegram_handlers.mark_version_updated",
+                return_value=False,
+            ) as mark_updated,
+            self.assertLogs(
+                "telegram_handlers",
+                level="WARNING",
+            ) as captured_logs,
+        ):
+            await handle_confirm_apply(update, context)
+
+        mark_updated.assert_called_once_with(
+            "xray",
+            "v2.0",
+            source="telegram_confirm",
+            actor_id=123456789,
+        )
+
+        self.assertIn(token, requests)
+
+        query.answer.assert_awaited_once_with(
+            "Не удалось подтвердить установку.",
+            show_alert=True,
+        )
+
+        self.assertTrue(
+            any(
+                "reason=database_update_rejected" in message
+                and "software=xray" in message
+                and "version=v2.0" in message
+                and "actor_id=123456789" in message
+                for message in captured_logs.output
+            )
+        )

@@ -5,7 +5,8 @@ from config_validation import ConfigError, parse_notification_button_retention
 from datetime import datetime, timezone
 from update_logic import should_notify, is_newer_version, UpdateResult
 from notifications import get_pending_notifications
-from telegram_notifier import send_update_notification
+from telegram_handlers.notifications import send_update_notification
+from telegram_handlers.command_logging import log_telegram_command
 from telegram import BotCommand
 from telegram.error import NetworkError
 from telegram.ext import (
@@ -18,6 +19,7 @@ from telegram.ext import (
 from telegram_handlers import (
     handle_version_updated,
     handle_status,
+    handle_start,
     handle_check,
     handle_pending,
     handle_check_selection,
@@ -258,6 +260,15 @@ async def handle_telegram_error(update, context) -> None:
         ) if error is not None else None,
     )
 
+async def debug_incoming(update, context):
+    message = update.effective_message
+    logger.info(
+        "Telegram incoming: user_id=%s | chat_id=%s | text=%r",
+        update.effective_user.id if update.effective_user else None,
+        update.effective_chat.id if update.effective_chat else None,
+        message.text if message else None,
+    )
+
 
 def main() -> None:
     setup_logging()
@@ -277,12 +288,12 @@ def main() -> None:
 
     async def post_init(application: Application) -> None:
         await application.bot.set_my_commands([
-            BotCommand("start", "запустить бота"),
+            BotCommand("start", "Начало работы и список команд"),
             BotCommand("status", "Состояние отслеживаемых программ"),
             BotCommand("check", "Проверить наличие обновлений"),
             BotCommand("pending", "Повторить неподтверждённые уведомления"),
             BotCommand("confirm", "Подтвердить установку обновления"),
-            BotCommand("skipped", "Покаазать список пропусков версий")
+            BotCommand("skipped", "Показать список пропусков версий")
         ])
         stop_event = asyncio.Event()
         shutdown.bind(stop_event)
@@ -368,6 +379,10 @@ def main() -> None:
     application.bot_data["config"] = config
     application.bot_data["telegram_chat_id"] = telegram_chat_id
     application.add_error_handler(handle_telegram_error)
+    application.add_handler(
+        MessageHandler(filters.COMMAND, log_telegram_command), group=-1
+    )
+    application.add_handler(CommandHandler("start", handle_start))
     application.add_handler(CommandHandler("status", handle_status))
     application.add_handler(CommandHandler("check", handle_check))
     application.add_handler(CommandHandler("pending", handle_pending))

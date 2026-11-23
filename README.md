@@ -873,3 +873,9 @@ sudo systemctl restart releaseradar.service
 ```
 
 If the service starts but the application does not work correctly, inspect its own log and configuration.
+
+# License
+
+ReleaseRadar is distributed under the terms of the **GNU General Public License version 3.0 (GPLv3)**.
+
+The full license text is available in the [LICENSE](LICENSE) file.

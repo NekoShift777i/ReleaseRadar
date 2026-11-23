@@ -1,6 +1,37 @@
 ReleaseRadar — Changelog
 ========================
 
+Version 1.2.1 — preparing for release
+-------------------------------------
+
+Added:
+- Installed-version change history with the source of each change.
+- User identifier (actor_id) in version-change history.
+- The /start command for the Telegram bot.
+- Logging for incoming Telegram messages and commands.
+- Additional automated tests for version changes and rejected confirmations.
+- GNU GPLv3 licensing for the project's source code.
+
+Improved:
+- Telegram command, confirmation, and notification handlers are organized by responsibility.
+- Logging for software state creation and successful version updates.
+- Diagnostics for rejected confirmations, including user details, version mismatches, and rejection reasons.
+- Handling of Telegram errors during manual update confirmation.
+- Telegram handler organization and command menu.
+
+Fixed:
+- Rollback when saving an updated version fails.
+- Redundant Telegram authorization log entries.
+
+Database changes:
+- Added version-change history.
+- Added actor_id to version-change history.
+- Implemented schema migration for existing databases.
+
+Notes:
+- Backing up the SQLite database before upgrading is recommended.
+- The project is distributed under GNU GPLv3; see the LICENSE file for the full text.
+
 Version 1.2.0 — preparing for release
 -------------------------------------
 
